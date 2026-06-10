@@ -62,9 +62,10 @@ const RequestList = () => {
     try {
       setLoading(true);
 
-      const params = user?.role === 'BL' || user?.role === 'BM'
-        ? { requested_by: user.username, role: user.role }
-        : {};
+      const params = {
+        role: user?.role,
+        username: user?.username
+      };
 
       const response = await requestService.getRequests(params);
 
@@ -176,11 +177,12 @@ const RequestList = () => {
                 <th>Doctor</th>
                 <th>Territory</th> {/* ✅ ADDED */}
                 <th>Region</th>    {/* ✅ ADDED */}
-                <th>Therapy Area</th>
+                {/* <th>Therapy Area</th> */}
                 <th>Objective</th>
                 <th>Priority</th>
-                <th>Classification</th>
+                <th>Status</th>
                 <th>Requested By</th>
+                <th>Assigned MSL</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -193,7 +195,6 @@ const RequestList = () => {
                   <td className="doctor-name">{request.doctor_name}</td>
                   <td>{request.territory}</td> {/* ✅ */}
                   <td>{request.region}</td>    {/* ✅ */}
-                  <td>{request.therapy_area}</td>
                   <td className="objective-cell">
                     {request.objective?.substring(0, 50)}
                     {request.objective?.length > 50 ? '...' : ''}
@@ -211,6 +212,13 @@ const RequestList = () => {
                     </span>
                   </td>
                   <td>{request.requested_by}</td>
+                  <td>
+                    {request.assigned_msl ? (
+                      <span className="assigned-badge">{request.assigned_msl}</span>
+                    ) : (
+                      <span className="unassigned-badge">Unassigned</span>
+                    )}
+                  </td>
                   <td>{formatDate(request.created_at)}</td>
                   <td>
                     <Link to={`/requests/${request.id}`} className="view-btn">

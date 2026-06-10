@@ -34,9 +34,10 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const params = user?.role === 'BL' || user?.role === 'BM'
-        ? { requested_by: user.username, role: user.role }
-        : {};
+      const params = {
+        role: user?.role,
+        username: user?.username
+      };
 
       const response = await requestService.getRequests(params);
       const requests = response.data;

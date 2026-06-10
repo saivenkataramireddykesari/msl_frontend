@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+const API_URL = import.meta.env.VITE_API_URL || "https://msl-backend-y6m5.onrender.com/api";
 
 const api = axios.create({
   baseURL: API_URL,
@@ -23,6 +23,37 @@ export const doctorService = {
   createDoctor: (data) => api.post("/doctors", data),
   duplicateDoctor: (id) => api.post(`/doctors/${id}/duplicate`),
   deleteDoctor: (id) => api.delete(`/doctors/${id}`),
+  
+  // Cascading dropdown APIs for BL location-based filtering
+  getRegionsByBL: (blTerritory = null) => {
+    const params = new URLSearchParams();
+    if (blTerritory) params.append("bl_territory", blTerritory);
+    return api.get(`/doctors/regions?${params.toString()}`);
+  },
+  
+  getTerritoriesByRegion: (region, blTerritory = null) => {
+    const params = new URLSearchParams();
+    params.append("region", region);
+    if (blTerritory) params.append("bl_territory", blTerritory);
+    return api.get(`/doctors/territories?${params.toString()}`);
+  },
+  
+  getPatchesByTerritory: (territory, region = null, blTerritory = null) => {
+    const params = new URLSearchParams();
+    params.append("territory", territory);
+    if (region) params.append("region", region);
+    if (blTerritory) params.append("bl_territory", blTerritory);
+    return api.get(`/doctors/patches?${params.toString()}`);
+  },
+  
+  getDoctorsByLocation: (region = null, territory = null, patch = null, blTerritory = null) => {
+    const params = new URLSearchParams();
+    if (region) params.append("region", region);
+    if (territory) params.append("territory", territory);
+    if (patch) params.append("patch", patch);
+    if (blTerritory) params.append("bl_territory", blTerritory);
+    return api.get(`/doctors/by-location?${params.toString()}`);
+  },
 };
 
 // ================= REQUEST =================
@@ -32,10 +63,20 @@ export const requestService = {
     if (params.requested_by)
       queryParams.append("requested_by", params.requested_by);
     if (params.role) queryParams.append("role", params.role);
+    if (params.username) queryParams.append("username", params.username);
 
     return api.get(`/requests?${queryParams.toString()}`);
   },
-  getRequest: (id) => api.get(`/requests/${id}`),
+  getRequest: (id, params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.role) queryParams.append("role", params.role);
+    if (params.username) queryParams.append("username", params.username);
+    
+    return api.get(`/requests/${id}?${queryParams.toString()}`);
+  },
+  assignRequest: (id, data) => {
+    return api.put(`/requests/${id}/assign`, data);
+  },
   createRequest: (data) => {
     console.log(
       "API createRequest - data being sent:",
@@ -104,11 +145,13 @@ export const interactionService = {
   getInteractions: (requestId) =>
     api.get(`/requests/${requestId}/interactions`),
 
-  // Doctor History
+  // Doctor History — all MSLs who visited this doctor
   getDoctorHistory: (doctorName) =>
-    api.get(
-      `/doctor-interactions?doctor_name=${encodeURIComponent(doctorName)}`,
-    ),
+    api.get(`/doctor-interactions/by-doctor?doctor_name=${encodeURIComponent(doctorName)}`),
+
+  // Get interactions by date and user
+  getInteractionsByDateUser: (visitDate, loggedBy) =>
+    api.get(`/doctor-interactions/by-date-user?visit_date=${encodeURIComponent(visitDate)}&logged_by=${encodeURIComponent(loggedBy)}`),
 };
 
 // ================= OFFICE ACTIVITY =================
@@ -124,6 +167,25 @@ export const activityService = {
   },
 
   getActivityUsers: () => api.get("/office-activities/users"),
+};
+
+// ================= REPORTS =================
+export const reportService = {
+  getMonthlySummary: (month, year, employeeIds = null) => {
+    const params = new URLSearchParams();
+    params.append("month", month);
+    params.append("year", year);
+    if (employeeIds) {
+      params.append("employee_ids", employeeIds);
+    }
+    return api.get(`/reports/monthly-summary?${params.toString()}`);
+  },
+};
+
+// ================= USERS =================
+export const userService = {
+  getUsers: () => api.get("/users"),
+  getMslUsers: () => api.get("/users/msls"),
 };
 
 export default api;
