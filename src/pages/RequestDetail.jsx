@@ -64,7 +64,7 @@ const RequestDetail = () => {
 
   // Roles that can assign/reassign requests
   const isManager = [
-    'Asst General Manager', 'Associate Vice President', 'BL', 'BM', 'SBUH/BH'
+    'Asst General Manager', 'Associate Vice President', 'SBUH/BH'
   ].includes(user?.role);
 
   useEffect(() => {

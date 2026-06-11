@@ -41,9 +41,6 @@ const Navbar = () => {
       <div className="navbar-menu">
         <Link to="/dashboard" className="nav-link">Dashboard</Link>
         <Link to="/requests" className="nav-link">Requests</Link>
-        {(user?.role === 'BL' || user?.role === 'BM') && (
-          <Link to="/doctors" className="nav-link">Doctors</Link>
-        )}
         {canAccessActivities && (
           <Link to="/office-activities" className="nav-link">Activities</Link>
         )}
