@@ -34,7 +34,7 @@ const OfficeActivities = () => {
   const [loadingDayInteractions, setLoadingDayInteractions] = useState(false);
 
   const [activityForm, setActivityForm] = useState({
-    activity_date: '',
+    activity_date: new Date().toISOString().split('T')[0],
     activity_category: '',
     summary: '',
     linked_outputs: '',
@@ -42,7 +42,7 @@ const OfficeActivities = () => {
     // doctors_visited is now auto-calculated based on date
   });
 
-  /* ── Auth / initial load ── */
+  /* -- Auth / initial load -- */
   useEffect(() => {
     if (user) {
       const isMSL = user.role === 'MSL' || user.role === 'Scientific Officer';
@@ -57,7 +57,7 @@ const OfficeActivities = () => {
     }
   }, [user]);
 
-  /* ── Data fetch ── */
+  /* -- Data fetch -- */
   const fetchMslUsers = async () => {
     try {
       setLoading(true);
@@ -85,7 +85,7 @@ const OfficeActivities = () => {
     }
   };
 
-  /* ── Navigation ── */
+  /* -- Navigation -- */
   const handleUserSelect = (username) => {
     setSelectedUser(username);
     setViewMode('activities');
@@ -100,7 +100,7 @@ const OfficeActivities = () => {
     fetchMslUsers();
   };
 
-  /* ── Log activity submit ── */
+  /* -- Log activity submit -- */
   const handleActivitySubmit = async (e) => {
     e.preventDefault();
     
@@ -135,7 +135,7 @@ const OfficeActivities = () => {
     }
   };
 
-  /* ── Helpers ── */
+  /* -- Helpers -- */
   const formatDate = (ds) =>
     new Date(ds).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -212,7 +212,7 @@ const OfficeActivities = () => {
     }
   };
 
-  /* ── Modal rows ── */
+  /* -- Modal rows -- */
   const modalActivities = reportMonth
     ? activities.filter(a => getMonthYear(a.activity_date) === reportMonth)
     : [];
@@ -235,13 +235,13 @@ const OfficeActivities = () => {
 
   const canLogActivities = user?.role === 'MSL' || user?.role === 'Scientific Officer';
 
-  /* ─────────────────────────────────────────────── */
+  /* ----------------------------------------------- */
   if (loading) return <div className="loading">Loading office activities...</div>;
 
   return (
     <div className="office-activities-container">
 
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <div className="list-header">
         <div className="header-left">
           {viewMode === 'activities' && !canLogActivities && (
@@ -256,7 +256,7 @@ const OfficeActivities = () => {
         )}
       </div>
 
-      {/* ── Users grid ── */}
+      {/* -- Users grid -- */}
       {viewMode === 'users' && (
         mslUsers.length === 0
           ? <div className="empty-state"><p>No MSLs have logged activities yet.</p></div>
@@ -273,7 +273,7 @@ const OfficeActivities = () => {
           )
       )}
 
-      {/* ── Activities view ── */}
+      {/* -- Activities view -- */}
       {viewMode === 'activities' && (
         <>
           {/* Month filter pills */}
@@ -385,9 +385,16 @@ const OfficeActivities = () => {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label style={{ fontSize: '13px', fontWeight: '600', color: '#4a5568' }}>Date *</label>
-                  <input type="date" value={activityForm.activity_date}
+                  <input
+                    type="date"
+                    value={activityForm.activity_date}
+                    min={new Date().toISOString().split('T')[0]}
+                    max={new Date().toISOString().split('T')[0]}
                     onChange={e => setActivityForm({ ...activityForm, activity_date: e.target.value })}
-                    className="form-control" style={{ marginTop: '6px' }} required />
+                    className="form-control"
+                    style={{ marginTop: '6px' }}
+                    required
+                  />
                 </div>
 
                 <div className="form-group" style={{ margin: 0 }}>
@@ -468,7 +475,7 @@ const OfficeActivities = () => {
                   <thead>
                     <tr style={{ background: '#f8f9ff', position: 'sticky', top: 0 }}>
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', whiteSpace: 'nowrap' }}>#</th>
-                      <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', whiteSpace: 'nowrap' }}>Date &amp; Day</th>
+                      <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', whiteSpace: 'nowrap' }}>Date & Day</th>
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', textAlign: 'center' }}>Office</th>
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', textAlign: 'center' }}>Field</th>
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', textAlign: 'center' }}>Hours</th>
@@ -610,17 +617,62 @@ const OfficeActivities = () => {
                       
                       {int.brand_discussed && (
                         <div style={{ fontSize: '12px', marginBottom: '4px' }}>
-                          <strong style={{ color: '#4b5563' }}>Brand Discussed:</strong> {int.brand_discussed}
+                          <strong style={{ color: '#4b5563' }}>Brand 1 Discussed:</strong> {int.brand_discussed}
+                        </div>
+                      )}
+                      {int.brand2_discussed && (
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Brand 2 Discussed:</strong> {int.brand2_discussed}
+                        </div>
+                      )}
+                      {int.topics_discussed && (
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Topic Discussed (Brand 1):</strong> {int.topics_discussed}
+                        </div>
+                      )}
+                      {int.brand2_topics && (
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Topic Discussed (Brand 2):</strong> {int.brand2_topics}
                         </div>
                       )}
                       {int.interest_level && (
-                        <div style={{ fontSize: '12px', marginBottom: '6px' }}>
-                          <strong style={{ color: '#4b5563' }}>Interest Level:</strong> {int.interest_level}
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Interest Level (Brand 1):</strong> {int.interest_level}
+                        </div>
+                      )}
+                      {int.brand2_interest_level && (
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Interest Level (Brand 2):</strong> {int.brand2_interest_level}
                         </div>
                       )}
                       {int.summary && (
-                        <div style={{ fontSize: '12px', color: '#4b5563', padding: '6px 8px', background: '#f9fafb', borderRadius: '4px', borderLeft: '3px solid #8b5cf6', lineHeight: '1.4' }}>
-                          {int.summary}
+                        <div style={{ fontSize: '12px', color: '#4b5563', padding: '6px 8px', background: '#f9fafb', borderRadius: '4px', borderLeft: '3px solid #8b5cf6', lineHeight: '1.4', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Summary (Brand 1):</strong> {int.summary}
+                        </div>
+                      )}
+                      {int.brand2_summary && (
+                        <div style={{ fontSize: '12px', color: '#4b5563', padding: '6px 8px', background: '#f9fafb', borderRadius: '4px', borderLeft: '3px solid #8b5cf6', lineHeight: '1.4', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Summary (Brand 2):</strong> {int.brand2_summary}
+                        </div>
+                      )}
+                      {int.outcomes && (
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Outcome (Brand 1):</strong> {int.outcomes}
+                        </div>
+                      )}
+                      {int.brand2_outcomes && (
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Outcome (Brand 2):</strong> {int.brand2_outcomes}
+                        </div>
+                      )}
+                      {int.objections && (
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Objections:</strong> {int.objections}
+                        </div>
+                      )}
+                      {int.insights_for_marketing && (
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <strong style={{ color: '#4b5563' }}>Insights for Marketing:</strong> {int.insights_for_marketing}
                         </div>
                       )}
                     </div>

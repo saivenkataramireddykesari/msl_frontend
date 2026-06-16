@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { doctorService, requestService, interactionService } from '../services/api';
@@ -24,6 +24,7 @@ const RequestForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const selectedDoctorId = location.state?.selectedDoctorId;
+  const brandDropdownRef = useRef(null); // Add this ref
 
   // State for cascading dropdowns
   const [regions, setRegions] = useState([]);
@@ -36,6 +37,7 @@ const RequestForm = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showBrandDropdown, setShowBrandDropdown] = useState(false); 
 
   const [formData, setFormData] = useState({
     doctor_id: '',
@@ -43,11 +45,15 @@ const RequestForm = () => {
     territory: '',
     patch: '',
     therapy_area: '',
-    objective: '',
-    expected_outcome: '',
-    priority: 'Medium',
-    notes: '',
-    brand: '',
+    selectedBrands: [], // Array to hold selected brands (up to 2)
+    objective1: '',
+    expected_outcome1: '',
+    priority1: 'Medium',
+    notes1: '',
+    objective2: '',
+    expected_outcome2: '',
+    priority2: 'Medium',
+    notes2: '',
     requested_by: '',
     requested_by_role: '',
   });
@@ -156,10 +162,24 @@ const RequestForm = () => {
     }
   };
 
+  // Close brand dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (brandDropdownRef.current && !brandDropdownRef.current.contains(event.target)) {
+        setShowBrandDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [brandDropdownRef]);
+
   // HANDLE CHANGE for form fields
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    console.log(`handleChange: ${name} = "${value}"`);
+    const { name, value, type, checked } = e.target; 
+    console.log(`handleChange: ${name} = "${value}", type: ${type}, checked: ${checked}`);
 
     if (name === 'region') {
       // Reset dependent fields when region changes
@@ -194,6 +214,69 @@ const RequestForm = () => {
         therapy_area: ''
       }));
       setDoctors([]);
+    } else if (name === 'brand_checkbox_custom') { // Handle custom brand checkboxes
+      setFormData(prev => {
+        const currentBrands = new Set(prev.selectedBrands);
+        if (checked) {
+          if (currentBrands.size < 2) {
+            currentBrands.add(value);
+          } else {
+            alert('You can select a maximum of 2 brands.');
+            return prev; 
+          }
+        } else {
+          currentBrands.delete(value);
+        }
+        const newSelectedBrands = Array.from(currentBrands);
+        
+        const updatedPrev = { ...prev };
+
+        // Reset all brand-specific fields initially
+        updatedPrev.objective1 = ''; updatedPrev.expected_outcome1 = '';
+        updatedPrev.priority1 = 'Medium'; updatedPrev.notes1 = '';
+        updatedPrev.objective2 = ''; updatedPrev.expected_outcome2 = '';
+        updatedPrev.priority2 = 'Medium'; updatedPrev.notes2 = '';
+
+        // Reassign values based on new selectedBrands order
+        if (newSelectedBrands[0]) {
+          const oldBrand1 = prev.selectedBrands[0];
+          const oldBrand2 = prev.selectedBrands[1];
+
+          if (newSelectedBrands[0] === oldBrand1) { // Same as previous Brand 1
+            updatedPrev.objective1 = prev.objective1;
+            updatedPrev.expected_outcome1 = prev.expected_outcome1;
+            updatedPrev.priority1 = prev.priority1;
+            updatedPrev.notes1 = prev.notes1;
+          } else if (newSelectedBrands[0] === oldBrand2) { // Was previous Brand 2
+            updatedPrev.objective1 = prev.objective2;
+            updatedPrev.expected_outcome1 = prev.expected_outcome2;
+            updatedPrev.priority1 = prev.priority2;
+            updatedPrev.notes1 = prev.notes2;
+          }
+        }
+
+        if (newSelectedBrands[1]) {
+          const oldBrand1 = prev.selectedBrands[0];
+          const oldBrand2 = prev.selectedBrands[1];
+
+          if (newSelectedBrands[1] === oldBrand2) { // Same as previous Brand 2
+            updatedPrev.objective2 = prev.objective2;
+            updatedPrev.expected_outcome2 = prev.expected_outcome2;
+            updatedPrev.priority2 = prev.priority2;
+            updatedPrev.notes2 = prev.notes2;
+          } else if (newSelectedBrands[1] === oldBrand1) { // Was previous Brand 1 (unlikely if only two can be chosen, but for completeness)
+            updatedPrev.objective2 = prev.objective1;
+            updatedPrev.expected_outcome2 = prev.expected_outcome1;
+            updatedPrev.priority2 = prev.priority1;
+            updatedPrev.notes2 = prev.notes1;
+          }
+        }
+        
+        return {
+          ...updatedPrev,
+          selectedBrands: newSelectedBrands,
+        };
+      });
     } else {
       setFormData(prev => ({
         ...prev,
@@ -267,10 +350,26 @@ const RequestForm = () => {
       return;
     }
 
-    if ((user?.role === 'BL' || user?.role === 'BM') && !formData.brand) {
-      setError('Please select a brand');
+    if ((user?.role === 'BL' || user?.role === 'BM') && formData.selectedBrands.length === 0) {
+      setError('Please select at least one brand.');
       setLoading(false);
       return;
+    }
+
+    // Validate per-brand engagement details if brands are selected
+    if (formData.selectedBrands[0]) {
+      if (!formData.objective1 || !formData.notes1) {
+        setError(`Please fill in all required engagement details for ${formData.selectedBrands[0]}.`);
+        setLoading(false);
+        return;
+      }
+    }
+    if (formData.selectedBrands[1]) {
+      if (!formData.objective2 || !formData.notes2) {
+        setError(`Please fill in all required engagement details for ${formData.selectedBrands[1]}.`);
+        setLoading(false);
+        return;
+      }
     }
 
     try {
@@ -283,17 +382,28 @@ const RequestForm = () => {
       }
 
       const requestPayload = {
-        region: formData.region,
-        territory: formData.territory,
         doctor_id: doctorId,
+        territory: formData.territory,
+        region: formData.region,
         therapy_area: formData.therapy_area,
-        objective: formData.objective,
-        expected_outcome: formData.expected_outcome,
-        priority: formData.priority,
-        notes: formData.notes,
-        brand: formData.brand || null,
+        
+        // First brand - use field names without "1" suffix to match backend schema
+        brand: formData.selectedBrands[0] || null,
+        objective: formData.objective1 || null,
+        expected_outcome: formData.expected_outcome1 || null,
+        priority: formData.priority1 || null,
+        notes: formData.notes1 || null,
+
+        // Second brand
+        brand2: formData.selectedBrands[1] || null,
+        objective2: formData.objective2 || null,
+        expected_outcome2: formData.expected_outcome2 || null,
+        priority2: formData.priority2 || null,
+        notes2: formData.notes2 || null,
+
         requested_by: user.username,
-        requested_by_role: user.role
+        requested_by_role: user.role,
+        // request_status and user_classification are handled by backend defaults or updates
       };
 
       console.log('Request payload to be sent:', JSON.stringify(requestPayload, null, 2));
@@ -385,7 +495,7 @@ const RequestForm = () => {
                 <option value="">Select Doctor</option>
                 {doctors.map(d => (
                   <option key={d.id} value={d.id}>
-                    {d.name} ({d.speciality || d.therapy_area || 'No Speciality'})
+                    {d.name} ({d.speciality || d.therapy_area || ''})
                   </option>
                 ))}
               </select>
@@ -398,61 +508,190 @@ const RequestForm = () => {
           </div>
 
           {(user?.role === 'BL' || user?.role === 'BM') && (
-            <div className="form-group">
-              <label>Brand *</label>
-              <select className="form-control" name="brand" value={formData.brand} onChange={handleChange} required>
-                <option value="">Select Brand</option>
-                {BRAND_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
+            <div className="form-group" style={{ position: 'relative' }} ref={brandDropdownRef}>
+              <label>Select Brands (up to 2) *</label>
+              <div
+                className="custom-multi-select-display"
+                onClick={() => setShowBrandDropdown(!showBrandDropdown)}
+                style={{
+                  border: '1px solid #ced4da',
+                  borderRadius: '0.25rem',
+                  padding: '0.375rem 0.75rem',
+                  minHeight: '38px',
+                  cursor: 'pointer',
+                  backgroundColor: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '5px',
+                }}
+              >
+                {formData.selectedBrands.length > 0 ? (
+                  formData.selectedBrands.map(brand => (
+                    <span key={brand} className="selected-brand-tag" style={{
+                      backgroundColor: '#e9ecef',
+                      padding: '2px 8px',
+                      borderRadius: '15px',
+                      fontSize: '0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
+                      {brand}
+                      <span onClick={(e) => {
+                        e.stopPropagation(); // Prevent dropdown from closing
+                        handleChange({
+                          target: { name: 'brand_checkbox_custom', value: brand, type: 'checkbox', checked: false }
+                        });
+                      }} style={{ cursor: 'pointer', fontWeight: 'bold' }}>&times;</span>
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ color: '#6c757d' }}>Select Brands...</span>
+                )}
+              </div>
+              
+              {showBrandDropdown && (
+                <div className="brand-options-dropdown" style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  border: '1px solid #ced4da',
+                  borderRadius: '0.25rem',
+                  backgroundColor: '#fff',
+                  zIndex: 1000,
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  boxShadow: '0 0.5rem 1rem rgba(0,0,0,.15)'
+                }}>
+                  {BRAND_OPTIONS.map(brand => (
+                    <label key={brand} className="checkbox-label" style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #eee'
+                    }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}>
+                      <input
+                        type="checkbox"
+                        name="brand_checkbox_custom"
+                        value={brand}
+                        checked={formData.selectedBrands.includes(brand)}
+                        onChange={handleChange}
+                        disabled={!formData.selectedBrands.includes(brand) && formData.selectedBrands.length >= 2}
+                        style={{ marginRight: '10px' }}
+                      />
+                      {brand}
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* ================= ENGAGEMENT DETAILS ================= */}
-        <div className="form-section">
-          <h3>Engagement Details</h3>
+        {(user?.role === 'BL' || user?.role === 'BM') && formData.selectedBrands.length > 0 && (
+          <div className="form-section">
+            <h3>Engagement Details</h3>
 
-          <div className="form-group">
-            <label>Objective *</label>
-            <textarea
-              className="form-control"
-              name="objective"
-              value={formData.objective}
-              onChange={handleChange} 
-              placeholder='Reason for requesting msl interaction'
-              required
-            />
-          </div>
+            {formData.selectedBrands[0] && (
+              <div className="brand-engagement-section">
+                <h4>{formData.selectedBrands[0]} Engagement Details</h4>
+                <div className="form-group">
+                  <label>Objective *</label>
+                  <textarea
+                    className="form-control"
+                    name="objective1"
+                    value={formData.objective1}
+                    onChange={handleChange} 
+                    placeholder={`Reason for requesting MSL interaction for ${formData.selectedBrands[0]}`}
+                    required
+                  />
+                </div>
 
-          <div className="form-group">
-            <label>Expected Outcome</label>
-            <textarea
-              className="form-control"
-              name="expected_outcome"
-              value={formData.expected_outcome} 
-              placeholder='Expectation from msl interaction'
-              onChange={handleChange}
-            />
-          </div>
+                <div className="form-group">
+                  <label>Expected Outcome</label>
+                  <textarea
+                    className="form-control"
+                    name="expected_outcome1"
+                    value={formData.expected_outcome1} 
+                    placeholder={`Expectation from MSL interaction for ${formData.selectedBrands[0]}`}
+                    onChange={handleChange}
+                  />
+                </div>
 
-          <div className="form-group">
-            <label>Priority</label>
-            <select className="form-control" name="priority" value={formData.priority} onChange={handleChange}>
-              {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
+                <div className="form-group">
+                  <label>Priority</label>
+                  <select className="form-control" name="priority1" value={formData.priority1} onChange={handleChange}>
+                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
 
-          <div className="form-group">
-            <label>Problem Statement</label>
-            <textarea
-              className="form-control"
-              name="notes"
-              value={formData.notes} 
-              placeholder='Concepts previously discussed, objections'
-              onChange={handleChange}
-            />
+                <div className="form-group">
+                  <label>Problem Statement * </label>
+                  <textarea
+                    className="form-control"
+                    name="notes1"
+                    value={formData.notes1} 
+                    placeholder={`Concepts previously discussed, objections for ${formData.selectedBrands[0]}`}
+                    required
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+            )}
+
+            {formData.selectedBrands[1] && (
+              <div className="brand-engagement-section">
+                <h4>{formData.selectedBrands[1]} Engagement Details</h4>
+                <div className="form-group">
+                  <label>Objective *</label>
+                  <textarea
+                    className="form-control"
+                    name="objective2"
+                    value={formData.objective2}
+                    onChange={handleChange} 
+                    placeholder={`Reason for requesting MSL interaction for ${formData.selectedBrands[1]}`}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Expected Outcome</label>
+                  <textarea
+                    className="form-control"
+                    name="expected_outcome2"
+                    value={formData.expected_outcome2} 
+                    placeholder={`Expectation from MSL interaction for ${formData.selectedBrands[1]}`}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Priority</label>
+                  <select className="form-control" name="priority2" value={formData.priority2} onChange={handleChange}>
+                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Problem Statement * </label>
+                  <textarea
+                    className="form-control"
+                    name="notes2"
+                    value={formData.notes2} 
+                    placeholder={`Concepts previously discussed, objections for ${formData.selectedBrands[1]}`}
+                    required
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* ================= HISTORY ================= */}
         {showHistory && (

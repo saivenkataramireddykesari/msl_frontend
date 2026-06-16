@@ -12,7 +12,6 @@ const RequestList = () => {
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ NEW STATES
   const [search, setSearch] = useState('');
   const [filterTerritory, setFilterTerritory] = useState('');
   const [filterRegion, setFilterRegion] = useState('');
@@ -23,39 +22,33 @@ const RequestList = () => {
     fetchRequests();
   }, [user]);
 
-  // ✅ UPDATED FILTER LOGIC (MERGED ALL FILTERS)
+  // Merged filter logic
   useEffect(() => {
     let data = requests;
 
-    // classification filter
     if (filterClassification !== 'All') {
       data = data.filter(r => r.user_classification === filterClassification);
     }
 
-    // search filter
     if (search) {
       data = data.filter(r =>
         r.doctor_name?.toLowerCase().includes(search.toLowerCase())
       );
     }
 
-    // territory filter
     if (filterTerritory) {
       data = data.filter(r => r.territory === filterTerritory);
     }
 
-    // region filter
     if (filterRegion) {
       data = data.filter(r => r.region === filterRegion);
     }
 
-    // therapy filter
     if (filterTherapy) {
       data = data.filter(r => r.therapy_area === filterTherapy);
     }
 
     setFilteredRequests(data);
-
   }, [filterClassification, search, filterTerritory, filterRegion, filterTherapy, requests]);
 
   const fetchRequests = async () => {
@@ -102,7 +95,7 @@ const RequestList = () => {
     <div className="request-list-container">
 
       <div className="list-header">
-        <h1>MSL Engagement Requests</h1>
+        <h1>Scientific Office Requests</h1>
         {(user?.role === 'BL' || user?.role === 'BM') && (
           <Link to="/requests/new" className="new-request-btn">
             + New Request
@@ -110,7 +103,7 @@ const RequestList = () => {
         )}
       </div>
 
-      {/* ✅ CLASSIFICATION FILTER */}
+      {/* Classification Filter */}
       <div className="filter-bar">
         <label>Filter by Classification:</label>
         <div className="filter-buttons">
@@ -132,9 +125,8 @@ const RequestList = () => {
         </div>
       </div>
 
-      {/* ✅ FILTER BAR */}
+      {/* Filter Bar */}
       <div className="filters">
-
         <input
           type="text"
           placeholder="Search doctor..."
@@ -162,8 +154,8 @@ const RequestList = () => {
             <option key={`therapy-${t}`} value={t}>{t}</option>
           ))}
         </select>
-
       </div>
+
       {filteredRequests.length === 0 ? (
         <div className="empty-state">
           <p>No requests found.</p>
@@ -175,14 +167,16 @@ const RequestList = () => {
               <tr>
                 <th>Request ID</th>
                 <th>Doctor</th>
-                <th>Territory</th> {/* ✅ ADDED */}
-                <th>Region</th>    {/* ✅ ADDED */}
-                {/* <th>Therapy Area</th> */}
-                <th>Objective</th>
-                <th>Priority</th>
-                <th>Status</th>
+                <th>Region</th>
+                <th>Territory</th>
+                <th>Objective(s)</th>
+                <th>Priority(s)</th>
+                <th>RX Status</th>
+                <th>Brand(s)</th>
+                <th>Assigned To</th>
+                <th>Request Status</th>
+                <th>Number Of Visits</th>
                 <th>Requested By</th>
-                <th>Assigned MSL</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -193,25 +187,46 @@ const RequestList = () => {
                 <tr key={request.id}>
                   <td>#{request.id}</td>
                   <td className="doctor-name">{request.doctor_name}</td>
-                  <td>{request.territory}</td> {/* ✅ */}
-                  <td>{request.region}</td>    {/* ✅ */}
+                  <td>{request.region}</td>
+                  <td>{request.territory}</td>
                   <td className="objective-cell">
                     {request.objective?.substring(0, 50)}
                     {request.objective?.length > 50 ? '...' : ''}
+                    {request.brand2 && request.objective2 && (
+                      <>
+                        <br />
+                        <em>{request.objective2?.substring(0, 50)}</em>
+                        {request.objective2?.length > 50 ? '...' : ''}
+                      </>
+                    )}
                   </td>
                   <td>
-                    <span className={`priority-badge ${request.priority?.toLowerCase()}`}>
-                      {request.priority}
-                    </span>
+                    {request.brand && request.priority && (
+                      <span className={`priority-badge ${request.priority?.toLowerCase()}`}>
+                        {request.priority}
+                      </span>
+                    )}
+                    {request.brand2 && request.priority2 && (
+                      <span className={`priority-badge ${request.priority2?.toLowerCase()}`} style={{ marginTop: '5px', display: 'block' }}>
+                        {request.priority2}
+                      </span>
+                    )}
+                    {(!request.brand || !request.priority) && (!request.brand2 || !request.priority2) && '—'}
                   </td>
                   <td>
                     <span className={`status-badge ${request.user_classification?.toLowerCase().replace(' ', '-') || 'default'}`}>
-                      {request.user_classification === 'potential' ? 'Potential User' :
-                        request.user_classification === 'non-potential' ? 'Not a Potential User' :
-                          'Default User'}
+                      {request.user_classification === 'potential'
+                        ? 'Potential User'
+                        : request.user_classification === 'non-potential'
+                          ? 'Not a Potential User'
+                          : 'Default User'}
                     </span>
                   </td>
-                  <td>{request.requested_by}</td>
+                  <td>
+                    {request.brand && <div>{request.brand}</div>}
+                    {request.brand2 && <div>{request.brand2}</div>}
+                    {!request.brand && !request.brand2 && '—'}
+                  </td>
                   <td>
                     {request.assigned_msl ? (
                       <span className="assigned-badge">{request.assigned_msl}</span>
@@ -219,6 +234,15 @@ const RequestList = () => {
                       <span className="unassigned-badge">Unassigned</span>
                     )}
                   </td>
+                  <td>
+                    <span className={`request-status-badge ${request.request_status === 'In Progress' ? 'in-progress' : 'pending'}`}>
+                      {request.request_status || 'Pending'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="visits-count">{request.num_visits ?? 0}</span>
+                  </td>
+                  <td>{request.requested_by}</td>
                   <td>{formatDate(request.created_at)}</td>
                   <td>
                     <Link to={`/requests/${request.id}`} className="view-btn">

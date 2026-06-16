@@ -20,8 +20,8 @@ const Navbar = () => {
     const roles = {
       'BL': 'Business Leader',
       'BM': 'Business Manager',
-      'MSL': 'Medical Science Liaison',
-      'Scientific Officer': 'Medical Science Liaison',
+      'MSL': 'Scientific Officer',
+      'Scientific Officer': 'Scientific Officer',
       'SBUH/BH': 'SBUH/BH',
       'Asst General Manager': 'Asst General Manager',
       'Associate Vice President': 'Associate Vice President'
@@ -35,7 +35,7 @@ const Navbar = () => {
   return (
     <nav className="navbar">
       <div className="navbar-brand">
-        <Link to="/dashboard">MSL Engagement</Link>
+        <Link to="/dashboard">Scientific Office</Link>
       </div>
 
       <div className="navbar-menu">
