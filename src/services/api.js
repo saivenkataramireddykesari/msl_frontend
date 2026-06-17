@@ -1,8 +1,8 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "https://msl-backend-y6m5.onrender.com/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
-
+// https://msl-backend-y6m5.onrender.com
 
 const api = axios.create({
   baseURL: API_URL,
@@ -132,6 +132,28 @@ export const requestService = {
         message: error.message,
         url: error.config?.url,
         params: error.config?.params,
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Update per-brand RX status
+   * @param {number} id - Request ID
+   * @param {object} data - Object containing rx_status_brand1 and/or rx_status_brand2
+   */
+  updateBrandStatus: async (id, data) => {
+    const url = `/requests/${id}/rx-status`;
+    console.log(`[API] PUT ${url}`, data);
+    try {
+      const response = await api.put(url, data);
+      console.log(`[API] Brand status update successful:`, response.data);
+      return response;
+    } catch (error) {
+      console.error(`[API] Brand status update failed for request ${id}:`, {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
       });
       throw error;
     }

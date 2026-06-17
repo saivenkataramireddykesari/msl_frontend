@@ -29,8 +29,9 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route path="dashboard" element={<Dashboard />} />
             <Route path="requests" element={<RequestList />} />
+            {/* Dashboard removed - role-based landing: BM → Monthly Report, Others → Requests */}
+            {/* <Route path="dashboard" element={<Navigate to="/requests" replace />} /> */}
             <Route path="requests/new" element={<RequestForm />} />
             <Route path="requests/:id" element={<RequestDetail />} />
             <Route path="doctors" element={<DoctorManagement />} />

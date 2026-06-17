@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { requestService, interactionService, userService } from '../services/api';
 import '../styles/RequestDetail.css';
 
-const STATUSES = ['default', 'potential', 'non-potential'];
+// const STATUSES = ['default', 'potential', 'non-potential'];
 
 const BRAND_OPTIONS = [
   'Aztor',
@@ -57,14 +57,26 @@ const RequestDetail = () => {
     summary: '',
     outcomes: '',
     brand_discussed: '',
-    brand2_discussed: '', // New field
-    brand2_topics: '',    // New field
-    brand2_summary: '',   // New field
-    brand2_outcomes: '',  // New field
+    brand2_discussed: '', // Legacy field
+    brand2_topics: '',    // Legacy field
+    brand2_summary: '',   // Legacy field
+    brand2_outcomes: '',  // Legacy field
     interest_level: '',
-    brand2_interest_level: '', // New field
+    brand2_interest_level: '', // Legacy field
     objections: '',
     insights_for_marketing: '',
+    // New dynamic brands array - each brand has its own objective and insights
+    brands: [
+      {
+        brand_name: '',
+        objective: '',
+        insights_marketing: '',
+        topics_discussed: '',
+        summary: '',
+        outcomes: '',
+        interest_level: ''
+      }
+    ]
   });
 
   // Roles that can assign/reassign requests
@@ -131,6 +143,7 @@ const RequestDetail = () => {
       }
       setRequest(requestData);
       setSelectedMsl(requestData.assigned_msl || '');
+      console.log('Logs data:', logsRes.data);
       setLogs(logsRes.data);
 
       // Pre-fill doctor name for interaction form
@@ -210,14 +223,89 @@ const RequestDetail = () => {
     }
   };
 
+  /**
+   * Handle Brand 1 RX status change
+   * @param {string} newStatus - The new status value ('potential', 'non-potential', 'default')
+   */
+  const handleBrand1StatusChange = async (newStatus) => {
+    try {
+      const response = await requestService.updateBrandStatus(id, { rx_status_brand1: newStatus });
+      setRequest((prev) => ({ ...prev, rx_status_brand1: newStatus }));
+      console.log('Brand 1 status updated successfully:', response.data);
+    } catch (error) {
+      console.error('Failed to update Brand 1 status:', error);
+      alert('Failed to update Brand 1 RX status');
+    }
+  };
+
+  /**
+   * Handle Brand 2 RX status change
+   * @param {string} newStatus - The new status value ('potential', 'non-potential', 'default')
+   */
+  const handleBrand2StatusChange = async (newStatus) => {
+    try {
+      const response = await requestService.updateBrandStatus(id, { rx_status_brand2: newStatus });
+      setRequest((prev) => ({ ...prev, rx_status_brand2: newStatus }));
+      console.log('Brand 2 status updated successfully:', response.data);
+    } catch (error) {
+      console.error('Failed to update Brand 2 status:', error);
+      alert('Failed to update Brand 2 RX status');
+    }
+  };
+
+  // Handle adding a new brand entry
+  const handleAddBrand = () => {
+    setInteractionForm(prev => ({
+      ...prev,
+      brands: [
+        ...prev.brands,
+        {
+          brand_name: '',
+          objective: '',
+          insights_marketing: '',
+          topics_discussed: '',
+          summary: '',
+          outcomes: '',
+          interest_level: ''
+        }
+      ]
+    }));
+  };
+
+  // Handle removing a brand entry
+  const handleRemoveBrand = (index) => {
+    setInteractionForm(prev => ({
+      ...prev,
+      brands: prev.brands.filter((_, i) => i !== index)
+    }));
+  };
+
+  // Handle brand field changes
+  const handleBrandChange = (index, field, value) => {
+    setInteractionForm(prev => ({
+      ...prev,
+      brands: prev.brands.map((brand, i) =>
+        i === index ? { ...brand, [field]: value } : brand
+      )
+    }));
+  };
+
   const handleInteractionSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Filter out empty brand entries
+      const validBrands = interactionForm.brands.filter(b => b.brand_name.trim() !== '');
+      
+      console.log('Current user:', user);
+      console.log('User username:', user?.username);
+      
       const submissionData = {
         ...interactionForm,
+        brands: validBrands,
         request_id: parseInt(id),
         logged_by: user?.username || '',
       };
+      console.log('Submission data:', submissionData);
       await interactionService.createInteraction(submissionData);
       setShowInteractionForm(false);
       setInteractionForm({
@@ -227,14 +315,25 @@ const RequestDetail = () => {
         summary: '',
         outcomes: '',
         brand_discussed: '',
-        brand2_discussed: '', // Reset new field
-        brand2_topics: '',    // Reset new field
-        brand2_summary: '',   // Reset new field
-        brand2_outcomes: '',  // Reset new field
+        brand2_discussed: '',
+        brand2_topics: '',
+        brand2_summary: '',
+        brand2_outcomes: '',
         interest_level: '',
-        brand2_interest_level: '', // Reset new field
+        brand2_interest_level: '',
         objections: '',
         insights_for_marketing: '',
+        brands: [
+          {
+            brand_name: '',
+            objective: '',
+            insights_marketing: '',
+            topics_discussed: '',
+            summary: '',
+            outcomes: '',
+            interest_level: ''
+          }
+        ]
       });
       fetchRequestData();
     } catch (error) {
@@ -320,34 +419,6 @@ const RequestDetail = () => {
           </Link>
           <h1>Request #{request.id}</h1>
         </div>
-        <div className="header-right">
-          <span
-            className={`status-badge-large ${getStatusClass(request.status)}`}
-          >
-            {request.status === 'potential'
-              ? 'Potential User'
-              : request.status === 'non-potential'
-                ? 'Not a Potential User'
-                : 'Default User'}
-          </span>
-          {canChangeStatus && (
-            <select
-              value={request.status}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              className="status-select"
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s === 'potential'
-                    ? 'Potential User'
-                    : s === 'non-potential'
-                      ? 'Not a Potential User'
-                      : 'Default'}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
       </div>
 
       <div className="request-info-card">
@@ -410,52 +481,115 @@ const RequestDetail = () => {
             </span>
           </div>
         </div>
-        {/* Brand 1 Details */}
-        {request.brand && (
-          <>
-            <div className="info-section">
-              <label>Brand 1</label>
-              <p style={{ fontWeight: '600', color: '#10b981' }}>{request.brand}</p>
-            </div>
-            <div className="info-section">
-              <label>Objective (Brand 1)</label>
-              <p>{request.objective || 'Not specified'}</p>
-            </div>
-            <div className="info-section">
-              <label>Expected Outcome (Brand 1)</label>
-              <p>{request.expected_outcome || 'Not specified'}</p>
-            </div>
-            {request.notes && (
-              <div className="info-section">
-                <label>Problem Statement (Brand 1)</label>
-                <p>{request.notes}</p>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Brand 2 Details */}
-        {request.brand2 && (
-          <>
-            <div className="info-section" style={{ marginTop: '20px', borderTop: '1px dashed #e0e0e0', paddingTop: '20px' }}>
-              <label>Brand 2</label>
-              <p style={{ fontWeight: '600', color: '#0d9488' }}>{request.brand2}</p>
-            </div>
-            <div className="info-section">
-              <label>Objective (Brand 2)</label>
-              <p>{request.objective2 || 'Not specified'}</p>
-            </div>
-            <div className="info-section">
-              <label>Expected Outcome (Brand 2)</label>
-              <p>{request.expected_outcome2 || 'Not specified'}</p>
-            </div>
-            {request.notes2 && (
-              <div className="info-section">
-                <label>Problem Statement (Brand 2)</label>
-                <p>{request.notes2}</p>
-              </div>
-            )}
-          </>
+        {/* Brand Details Table */}
+        {(request.brand || request.brand2) && (
+          <div style={{ marginTop: '20px', overflowX: 'auto' }}>
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              background: 'white',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            }}>
+              <thead>
+                <tr style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                  <th style={{
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    color: 'white',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    borderBottom: '2px solid #e0e0e0'
+                  }}>Brand</th>
+                  <th style={{
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    color: 'white',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    borderBottom: '2px solid #e0e0e0'
+                  }}>Objective</th>
+                  <th style={{
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    color: 'white',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    borderBottom: '2px solid #e0e0e0'
+                  }}>Expected Outcome</th>
+                  <th style={{
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    color: 'white',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    borderBottom: '2px solid #e0e0e0'
+                  }}>Problem Statement</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Brand 1 Row */}
+                {request.brand && (
+                  <tr style={{ background: '#f0fff4', borderBottom: '1px solid #e0e0e0' }}>
+                    <td style={{
+                      padding: '12px 16px',
+                      fontWeight: '600',
+                      color: '#10b981',
+                      fontSize: '14px'
+                    }}>{request.brand}</td>
+                    <td style={{
+                      padding: '12px 16px',
+                      color: '#4b5563',
+                      fontSize: '13px',
+                      lineHeight: '1.5'
+                    }}>{request.objective || 'Not specified'}</td>
+                    <td style={{
+                      padding: '12px 16px',
+                      color: '#4b5563',
+                      fontSize: '13px',
+                      lineHeight: '1.5'
+                    }}>{request.expected_outcome || 'Not specified'}</td>
+                    <td style={{
+                      padding: '12px 16px',
+                      color: '#4b5563',
+                      fontSize: '13px',
+                      lineHeight: '1.5'
+                    }}>{request.notes || 'Not specified'}</td>
+                  </tr>
+                )}
+                {/* Brand 2 Row */}
+                {request.brand2 && (
+                  <tr style={{ background: '#e6fffa', borderBottom: '1px solid #e0e0e0' }}>
+                    <td style={{
+                      padding: '12px 16px',
+                      fontWeight: '600',
+                      color: '#0d9488',
+                      fontSize: '14px'
+                    }}>{request.brand2}</td>
+                    <td style={{
+                      padding: '12px 16px',
+                      color: '#4b5563',
+                      fontSize: '13px',
+                      lineHeight: '1.5'
+                    }}>{request.objective2 || 'Not specified'}</td>
+                    <td style={{
+                      padding: '12px 16px',
+                      color: '#4b5563',
+                      fontSize: '13px',
+                      lineHeight: '1.5'
+                    }}>{request.expected_outcome2 || 'Not specified'}</td>
+                    <td style={{
+                      padding: '12px 16px',
+                      color: '#4b5563',
+                      fontSize: '13px',
+                      lineHeight: '1.5'
+                    }}>{request.notes2 || 'Not specified'}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -563,22 +697,31 @@ const RequestDetail = () => {
                 )}
               </div>
             ) : (
-              <div className="timeline">
-                {logs.map((log) => (
-                  <div key={`${log.type}-${log.id}`} className="timeline-item">
-                    <div className={`timeline-dot ${log.type}`}></div>
-                    <div className="timeline-content">
-                      <div className="timeline-header">
-                        <span className="timeline-type">👨‍⚕️ Doctor Visit</span>
-                        <span className="timeline-date">
-                          {formatDate(log.date)}
-                        </span>
-                      </div>
-                      <h4>{log.title}</h4>
-                      {log.details && <p>{log.details}</p>}
-                    </div>
-                  </div>
-                ))}
+              <div className="timeline-table-container" style={{ marginTop: '20px' }}>
+                <table className="timeline-table" style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                  <thead>
+                    <tr style={{ background: 'linear-gradient(135deg, #667eea, #764ba2)', color: 'white' }}>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px' }}>Date</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px' }}>MSL Name</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log, index) => {
+                      console.log('Log entry:', log);
+                      const mslName = log.logged_by || (log.title && log.title.replace('Visit by ', '')) || 'Unknown';
+                      return (
+                        <tr key={`${log.type}-${log.id}`} style={{ borderBottom: '1px solid #e5e7eb', background: index % 2 === 0 ? 'white' : '#f9fafb' }}>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#374151', whiteSpace: 'nowrap' }}>
+                            {formatDate(log.date)}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#111827', fontWeight: '500' }}>
+                            {mslName}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
 
@@ -682,73 +825,126 @@ const RequestDetail = () => {
                       </span>
                     </div>
                     <div className="interaction-details">
-                      {interaction.brand_discussed && (
-                        <p>
-                          <strong>Brand 1 Discussed:</strong>{' '}
-                          {interaction.brand_discussed}
-                        </p>
-                      )}
-                      {interaction.brand2_discussed && (
-                        <p>
-                          <strong>Brand 2 Discussed:</strong>{' '}
-                          {interaction.brand2_discussed}
-                        </p>
-                      )}
-                      {interaction.topics_discussed && (
-                        <p>
-                          <strong>Topic Discussed (Brand 1):</strong>{' '}
-                          {interaction.topics_discussed}
-                        </p>
-                      )}
-                      {interaction.brand2_topics && (
-                        <p>
-                          <strong>Topic Discussed (Brand 2):</strong>{' '}
-                          {interaction.brand2_topics}
-                        </p>
-                      )}
-                      {interaction.interest_level && (
-                        <p>
-                          <strong>Interest Level (Brand 1):</strong>{' '}
-                          {interaction.interest_level}
-                        </p>
-                      )}
-                      {interaction.brand2_interest_level && (
-                        <p>
-                          <strong>Interest Level (Brand 2):</strong>{' '}
-                          {interaction.brand2_interest_level}
-                        </p>
-                      )}
-                      {interaction.summary && (
-                        <p className="summary">
-                          <strong>Discussion Summary (Brand 1):</strong>{' '}
-                          {interaction.summary}
-                        </p>
-                      )}
-                      {interaction.brand2_summary && (
-                        <p className="summary">
-                          <strong>Discussion Summary (Brand 2):</strong>{' '}
-                          {interaction.brand2_summary}
-                        </p>
-                      )}
-                      {interaction.outcomes && (
-                        <p className="outcomes" style={{ marginTop: '5px' }}>
-                          <strong>Outcome (Brand 1):</strong> {interaction.outcomes}
-                        </p>
-                      )}
-                      {interaction.brand2_outcomes && (
-                        <p className="outcomes" style={{ marginTop: '5px' }}>
-                          <strong>Outcome (Brand 2):</strong> {interaction.brand2_outcomes}
-                        </p>
+                      {/* Display dynamic brands */}
+                      {interaction.brands && interaction.brands.length > 0 ? (
+                        interaction.brands.map((brand, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              background: idx % 2 === 0 ? '#f0fff4' : '#e6fffa',
+                              padding: '12px',
+                              borderRadius: '6px',
+                              marginBottom: '12px',
+                              border: idx % 2 === 0 ? '1px solid #9ae6b4' : '1px solid #81e6d9'
+                            }}
+                          >
+                            <h5 style={{ margin: '0 0 8px 0', color: idx % 2 === 0 ? '#22543d' : '#234e52', fontSize: '13px' }}>
+                              Brand: {brand.brand_name}
+                            </h5>
+                            {brand.objective && (
+                              <p style={{ margin: '4px 0', fontSize: '13px' }}>
+                                <strong>Objective:</strong> {brand.objective}
+                              </p>
+                            )}
+                            {brand.insights_marketing && (
+                              <p style={{ margin: '4px 0', fontSize: '13px' }}>
+                                <strong>Insights for Marketing:</strong> {brand.insights_marketing}
+                              </p>
+                            )}
+                            {brand.topics_discussed && (
+                              <p style={{ margin: '4px 0', fontSize: '13px' }}>
+                                <strong>Topics Discussed:</strong> {brand.topics_discussed}
+                              </p>
+                            )}
+                            {brand.summary && (
+                              <p style={{ margin: '4px 0', fontSize: '13px' }}>
+                                <strong>Summary:</strong> {brand.summary}
+                              </p>
+                            )}
+                            {brand.interest_level && (
+                              <p style={{ margin: '4px 0', fontSize: '13px' }}>
+                                <strong>Interest Level:</strong> {brand.interest_level}
+                              </p>
+                            )}
+                            {brand.outcomes && (
+                              <p style={{ margin: '4px 0', fontSize: '13px' }}>
+                                <strong>Outcome:</strong> {brand.outcomes}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        /* Legacy display for old interactions without brands array */
+                        <>
+                          {interaction.brand_discussed && (
+                            <p>
+                              <strong>Brand 1 Discussed:</strong>{' '}
+                              {interaction.brand_discussed}
+                            </p>
+                          )}
+                          {interaction.brand2_discussed && (
+                            <p>
+                              <strong>Brand 2 Discussed:</strong>{' '}
+                              {interaction.brand2_discussed}
+                            </p>
+                          )}
+                          {interaction.topics_discussed && (
+                            <p>
+                              <strong>Topic Discussed (Brand 1):</strong>{' '}
+                              {interaction.topics_discussed}
+                            </p>
+                          )}
+                          {interaction.brand2_topics && (
+                            <p>
+                              <strong>Topic Discussed (Brand 2):</strong>{' '}
+                              {interaction.brand2_topics}
+                            </p>
+                          )}
+                          {interaction.interest_level && (
+                            <p>
+                              <strong>Interest Level (Brand 1):</strong>{' '}
+                              {interaction.interest_level}
+                            </p>
+                          )}
+                          {interaction.brand2_interest_level && (
+                            <p>
+                              <strong>Interest Level (Brand 2):</strong>{' '}
+                              {interaction.brand2_interest_level}
+                            </p>
+                          )}
+                          {interaction.summary && (
+                            <p className="summary">
+                              <strong>Discussion Summary (Brand 1):</strong>{' '}
+                              {interaction.summary}
+                            </p>
+                          )}
+                          {interaction.brand2_summary && (
+                            <p className="summary">
+                              <strong>Discussion Summary (Brand 2):</strong>{' '}
+                              {interaction.brand2_summary}
+                            </p>
+                          )}
+                          {interaction.outcomes && (
+                            <p className="outcomes" style={{ marginTop: '5px' }}>
+                              <strong>Outcome (Brand 1):</strong> {interaction.outcomes}
+                            </p>
+                          )}
+                          {interaction.brand2_outcomes && (
+                            <p className="outcomes" style={{ marginTop: '5px' }}>
+                              <strong>Outcome (Brand 2):</strong> {interaction.brand2_outcomes}
+                            </p>
+                          )}
+                          {interaction.insights_for_marketing && (
+                            <p style={{ marginTop: '5px' }}>
+                              <strong>Insights for Marketing:</strong>{' '}
+                              {interaction.insights_for_marketing}
+                            </p>
+                          )}
+                        </>
                       )}
                       {interaction.objections && (
                         <p style={{ marginTop: '5px' }}>
                           <strong>Objections:</strong> {interaction.objections}
-                        </p>
-                      )}
-                      {interaction.insights_for_marketing && (
-                        <p style={{ marginTop: '5px' }}>
-                          <strong>Insights for Marketing:</strong>{' '}
-                          {interaction.insights_for_marketing}
                         </p>
                       )}
                     </div>
@@ -1092,137 +1288,156 @@ const RequestDetail = () => {
                 </div>
               </div>
 
-              {/* Brand 1 Section */}
-              <div style={{ background: '#f0fff4', border: '1px solid #9ae6b4', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
-                <h4 style={{ margin: '0 0 12px 0', color: '#22543d', fontSize: '14px' }}>Brand 1</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+              {/* Dynamic Brand Sections */}
+              {interactionForm.brands.map((brand, index) => (
+                <div
+                  key={index}
+                  style={{
+                    background: index % 2 === 0 ? '#f0fff4' : '#e6fffa',
+                    border: index % 2 === 0 ? '1px solid #9ae6b4' : '1px solid #81e6d9',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    marginBottom: '20px',
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h4 style={{ margin: 0, color: index % 2 === 0 ? '#22543d' : '#234e52', fontSize: '14px' }}>
+                      Brand {index + 1} {index === 0 && '*'}
+                    </h4>
+                    {index > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveBrand(index)}
+                        style={{
+                          background: '#fed7d7',
+                          border: 'none',
+                          color: '#c53030',
+                          padding: '4px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '600'
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Brand Name *</label>
+                      <select
+                        value={brand.brand_name}
+                        onChange={e => handleBrandChange(index, 'brand_name', e.target.value)}
+                        className="form-control"
+                        style={{ marginTop: '4px' }}
+                        required={index === 0}
+                      >
+                        <option value="">Select Brand</option>
+                        {BRAND_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Interest Level</label>
+                      <select
+                        value={brand.interest_level}
+                        onChange={e => handleBrandChange(index, 'interest_level', e.target.value)}
+                        className="form-control"
+                        style={{ marginTop: '4px' }}
+                      >
+                        <option value="">Select Level</option>
+                        {INTEREST_LEVEL_OPTIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Objective</label>
+                    <textarea
+                      value={brand.objective}
+                      onChange={e => handleBrandChange(index, 'objective', e.target.value)}
+                      className="form-control"
+                      rows="2"
+                      style={{ marginTop: '4px', resize: 'vertical' }}
+                      placeholder="Objective for this brand discussion..."
+                    />
+                  </div>
+                  
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Insights for Marketing</label>
+                    <textarea
+                      value={brand.insights_marketing}
+                      onChange={e => handleBrandChange(index, 'insights_marketing', e.target.value)}
+                      className="form-control"
+                      rows="2"
+                      style={{ marginTop: '4px', resize: 'vertical' }}
+                      placeholder="Marketing insights from this brand discussion..."
+                    />
+                  </div>
+                  
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Topics Discussed</label>
+                    <textarea
+                      value={brand.topics_discussed}
+                      onChange={e => handleBrandChange(index, 'topics_discussed', e.target.value)}
+                      className="form-control"
+                      rows="2"
+                      style={{ marginTop: '4px', resize: 'vertical' }}
+                      placeholder="What topics were discussed..."
+                    />
+                  </div>
+                  
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Summary</label>
+                    <textarea
+                      value={brand.summary}
+                      onChange={e => handleBrandChange(index, 'summary', e.target.value)}
+                      className="form-control"
+                      rows="2"
+                      style={{ marginTop: '4px', resize: 'vertical' }}
+                      placeholder="Brief summary of the discussion..."
+                    />
+                  </div>
+                  
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Brand Discussed</label>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Outcomes</label>
                     <select
-                      value={interactionForm.brand_discussed}
-                      onChange={e => setInteractionForm({ ...interactionForm, brand_discussed: e.target.value })}
+                      value={brand.outcomes}
+                      onChange={e => handleBrandChange(index, 'outcomes', e.target.value)}
                       className="form-control"
                       style={{ marginTop: '4px' }}
                     >
-                      <option value="">Select Brand</option>
-                      {BRAND_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Interest Level</label>
-                    <select
-                      value={interactionForm.interest_level}
-                      onChange={e => setInteractionForm({ ...interactionForm, interest_level: e.target.value })}
-                      className="form-control"
-                      style={{ marginTop: '4px' }}
-                    >
-                      <option value="">Select Level</option>
-                      {INTEREST_LEVEL_OPTIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                      <option value="">Select Outcome</option>
+                      {OUTCOME_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                     </select>
                   </div>
                 </div>
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Topics Discussed</label>
-                  <textarea
-                    value={interactionForm.topics_discussed}
-                    onChange={e => setInteractionForm({ ...interactionForm, topics_discussed: e.target.value })}
-                    className="form-control"
-                    rows="2"
-                    style={{ marginTop: '4px', resize: 'vertical' }}
-                    placeholder="What topics were discussed..."
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Summary</label>
-                  <textarea
-                    value={interactionForm.summary}
-                    onChange={e => setInteractionForm({ ...interactionForm, summary: e.target.value })}
-                    className="form-control"
-                    rows="2"
-                    style={{ marginTop: '4px', resize: 'vertical' }}
-                    placeholder="Brief summary of the discussion..."
-                  />
-                </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Outcomes</label>
-                  <select
-                    value={interactionForm.outcomes}
-                    onChange={e => setInteractionForm({ ...interactionForm, outcomes: e.target.value })}
-                    className="form-control"
-                    style={{ marginTop: '4px' }}
-                  >
-                    <option value="">Select Outcome</option>
-                    {OUTCOME_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
+              ))}
+
+              {/* Add Other Brand Button */}
+              <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+                <button
+                  type="button"
+                  onClick={handleAddBrand}
+                  style={{
+                    background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 24px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  + Add Other Brand
+                </button>
               </div>
 
-              {/* Brand 2 Section */}
-              <div style={{ background: '#e6fffa', border: '1px solid #81e6d9', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
-                <h4 style={{ margin: '0 0 12px 0', color: '#234e52', fontSize: '14px' }}>Brand 2 (Optional)</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Brand Discussed</label>
-                    <select
-                      value={interactionForm.brand2_discussed}
-                      onChange={e => setInteractionForm({ ...interactionForm, brand2_discussed: e.target.value })}
-                      className="form-control"
-                      style={{ marginTop: '4px' }}
-                    >
-                      <option value="">Select Brand</option>
-                      {BRAND_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Interest Level</label>
-                    <select
-                      value={interactionForm.brand2_interest_level}
-                      onChange={e => setInteractionForm({ ...interactionForm, brand2_interest_level: e.target.value })}
-                      className="form-control"
-                      style={{ marginTop: '4px' }}
-                    >
-                      <option value="">Select Level</option>
-                      {INTEREST_LEVEL_OPTIONS.map(l => <option key={l} value={l}>{l}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Topics Discussed</label>
-                  <textarea
-                    value={interactionForm.brand2_topics}
-                    onChange={e => setInteractionForm({ ...interactionForm, brand2_topics: e.target.value })}
-                    className="form-control"
-                    rows="2"
-                    style={{ marginTop: '4px', resize: 'vertical' }}
-                    placeholder="What topics were discussed for Brand 2..."
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Summary</label>
-                  <textarea
-                    value={interactionForm.brand2_summary}
-                    onChange={e => setInteractionForm({ ...interactionForm, brand2_summary: e.target.value })}
-                    className="form-control"
-                    rows="2"
-                    style={{ marginTop: '4px', resize: 'vertical' }}
-                    placeholder="Brief summary for Brand 2..."
-                  />
-                </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Outcomes</label>
-                  <select
-                    value={interactionForm.brand2_outcomes}
-                    onChange={e => setInteractionForm({ ...interactionForm, brand2_outcomes: e.target.value })}
-                    className="form-control"
-                    style={{ marginTop: '4px' }}
-                  >
-                    <option value="">Select Outcome</option>
-                    {OUTCOME_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Objections and Insights */}
+              {/* Objections */}
               <div className="form-group" style={{ marginBottom: '16px' }}>
                 <label style={{ fontSize: '13px', fontWeight: '600', color: '#4a5568' }}>Objections (if any)</label>
                 <textarea
@@ -1234,17 +1449,6 @@ const RequestDetail = () => {
                   placeholder="Any objections raised by the doctor..."
                 />
               </div>
-              <div className="form-group" style={{ marginBottom: '20px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#4a5568' }}>Insights for Marketing</label>
-                <textarea
-                  value={interactionForm.insights_for_marketing}
-                  onChange={e => setInteractionForm({ ...interactionForm, insights_for_marketing: e.target.value })}
-                  className="form-control"
-                  rows="2"
-                  style={{ marginTop: '6px', resize: 'vertical' }}
-                  placeholder="Any insights to share with marketing team..."
-                />
-              </div>
 
               <div className="modal-actions" style={{ borderTop: '1px solid #edf2f7', paddingTop: '16px', marginTop: '16px' }}>
                 <button type="button" onClick={() => setShowInteractionForm(false)} className="btn-secondary">Cancel</button>
@@ -1254,6 +1458,203 @@ const RequestDetail = () => {
           </div>
         </div>
       )}
+
+      {/* Selected Visit Report Modal */}
+      {selectedVisitReport && (
+        <div
+          onClick={() => setSelectedVisitReport(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            zIndex: 1000, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '600px', maxWidth: '95vw', maxHeight: '90vh',
+              background: 'white', borderRadius: '16px',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden'
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #7c3aed, #a78bfa)',
+              padding: '20px 24px', display: 'flex',
+              justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <div>
+                <div style={{ color: 'white', fontWeight: '700', fontSize: '16px' }}>
+                  🏥 Previous MSL Visit Report
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '13px', marginTop: '2px' }}>
+                  by {selectedVisitReport.logged_by} on {formatDate(selectedVisitReport.visit_date)}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedVisitReport(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.2)', border: 'none',
+                  color: 'white', width: '32px', height: '32px',
+                  borderRadius: '50%', cursor: 'pointer', fontSize: '18px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+              >×</button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+              {/* Doctor Info */}
+              <div style={{ marginBottom: '20px', padding: '16px', background: '#f3f4f6', borderRadius: '10px' }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '4px' }}>
+                  Dr. {selectedVisitReport.doctor_name}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  Visit Date: {formatDate(selectedVisitReport.visit_date)}
+                </div>
+              </div>
+
+              {/* Brands Discussed */}
+              {selectedVisitReport.brands && selectedVisitReport.brands.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {selectedVisitReport.brands.map((brand, idx) => (
+                    <div key={idx} style={{
+                      border: '1px solid #e5e7eb',
+                      borderLeft: '4px solid #7c3aed',
+                      borderRadius: '10px',
+                      padding: '16px',
+                      background: idx % 2 === 0 ? '#f5f3ff' : '#faf8ff'
+                    }}>
+                      <div style={{ fontWeight: '700', color: '#7c3aed', fontSize: '14px', marginBottom: '12px' }}>
+                        Brand {idx + 1}: {brand.brand_name}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: '#374151' }}>
+                        {brand.objective && (
+                          <div><strong style={{ color: '#6b7280' }}>Objective:</strong> {brand.objective}</div>
+                        )}
+                        {brand.topics_discussed && (
+                          <div><strong style={{ color: '#6b7280' }}>Topics Discussed:</strong> {brand.topics_discussed}</div>
+                        )}
+                        {brand.summary && (
+                          <div style={{ background: 'white', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd6fe' }}>
+                            <strong style={{ color: '#6b7280' }}>Summary:</strong> {brand.summary}
+                          </div>
+                        )}
+                        {brand.outcomes && (
+                          <div><strong style={{ color: '#6b7280' }}>Outcome:</strong> {brand.outcomes}</div>
+                        )}
+                        {brand.interest_level && (
+                          <div><strong style={{ color: '#6b7280' }}>Interest Level:</strong> {brand.interest_level}</div>
+                        )}
+                        {brand.insights_marketing && (
+                          <div><strong style={{ color: '#6b7280' }}>Marketing Insights:</strong> {brand.insights_marketing}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Legacy display for old interactions without brands array */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Brand 1 */}
+                  {(selectedVisitReport.brand_discussed || selectedVisitReport.topics_discussed || selectedVisitReport.summary) && (
+                    <div style={{
+                      border: '1px solid #e5e7eb',
+                      borderLeft: '4px solid #7c3aed',
+                      borderRadius: '10px',
+                      padding: '16px',
+                      background: '#f5f3ff'
+                    }}>
+                      <div style={{ fontWeight: '700', color: '#7c3aed', fontSize: '14px', marginBottom: '12px' }}>
+                        Brand 1: {selectedVisitReport.brand_discussed || 'N/A'}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: '#374151' }}>
+                        {selectedVisitReport.topics_discussed && (
+                          <div><strong style={{ color: '#6b7280' }}>Topics Discussed:</strong> {selectedVisitReport.topics_discussed}</div>
+                        )}
+                        {selectedVisitReport.summary && (
+                          <div style={{ background: 'white', padding: '8px 12px', borderRadius: '6px', border: '1px solid #ddd6fe' }}>
+                            <strong style={{ color: '#6b7280' }}>Summary:</strong> {selectedVisitReport.summary}
+                          </div>
+                        )}
+                        {selectedVisitReport.outcomes && (
+                          <div><strong style={{ color: '#6b7280' }}>Outcome:</strong> {selectedVisitReport.outcomes}</div>
+                        )}
+                        {selectedVisitReport.interest_level && (
+                          <div><strong style={{ color: '#6b7280' }}>Interest Level:</strong> {selectedVisitReport.interest_level}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Brand 2 */}
+                  {(selectedVisitReport.brand2_discussed || selectedVisitReport.brand2_topics || selectedVisitReport.brand2_summary) && (
+                    <div style={{
+                      border: '1px solid #e5e7eb',
+                      borderLeft: '4px solid #0d9488',
+                      borderRadius: '10px',
+                      padding: '16px',
+                      background: '#f0fdfa'
+                    }}>
+                      <div style={{ fontWeight: '700', color: '#0d9488', fontSize: '14px', marginBottom: '12px' }}>
+                        Brand 2: {selectedVisitReport.brand2_discussed || 'N/A'}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: '#374151' }}>
+                        {selectedVisitReport.brand2_topics && (
+                          <div><strong style={{ color: '#6b7280' }}>Topics Discussed:</strong> {selectedVisitReport.brand2_topics}</div>
+                        )}
+                        {selectedVisitReport.brand2_summary && (
+                          <div style={{ background: 'white', padding: '8px 12px', borderRadius: '6px', border: '1px solid #99f6e4' }}>
+                            <strong style={{ color: '#6b7280' }}>Summary:</strong> {selectedVisitReport.brand2_summary}
+                          </div>
+                        )}
+                        {selectedVisitReport.brand2_outcomes && (
+                          <div><strong style={{ color: '#6b7280' }}>Outcome:</strong> {selectedVisitReport.brand2_outcomes}</div>
+                        )}
+                        {selectedVisitReport.brand2_interest_level && (
+                          <div><strong style={{ color: '#6b7280' }}>Interest Level:</strong> {selectedVisitReport.brand2_interest_level}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Objections & Insights */}
+              <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {selectedVisitReport.objections && (
+                  <div style={{ padding: '12px 16px', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
+                    <strong style={{ color: '#92400e', fontSize: '13px' }}>Objections:</strong>
+                    <div style={{ fontSize: '13px', color: '#78350f', marginTop: '4px' }}>{selectedVisitReport.objections}</div>
+                  </div>
+                )}
+                {selectedVisitReport.insights_for_marketing && (
+                  <div style={{ padding: '12px 16px', background: '#dbeafe', borderRadius: '8px', border: '1px solid #93c5fd' }}>
+                    <strong style={{ color: '#1e40af', fontSize: '13px' }}>Marketing Insights:</strong>
+                    <div style={{ fontSize: '13px', color: '#1e3a8a', marginTop: '4px' }}>{selectedVisitReport.insights_for_marketing}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setSelectedVisitReport(null)}
+                style={{
+                  background: '#f3f4f6', color: '#374151', border: 'none',
+                  padding: '10px 20px', borderRadius: '8px', cursor: 'pointer',
+                  fontSize: '14px', fontWeight: '600'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

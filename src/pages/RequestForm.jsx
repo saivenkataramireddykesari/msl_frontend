@@ -623,12 +623,12 @@ const RequestForm = () => {
                   />
                 </div>
 
-                <div className="form-group">
+                {/* <div className="form-group">
                   <label>Priority</label>
                   <select className="form-control" name="priority1" value={formData.priority1} onChange={handleChange}>
                     {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
-                </div>
+                </div> */}
 
                 <div className="form-group">
                   <label>Problem Statement * </label>
@@ -670,12 +670,12 @@ const RequestForm = () => {
                   />
                 </div>
 
-                <div className="form-group">
+                {/* <div className="form-group">
                   <label>Priority</label>
                   <select className="form-control" name="priority2" value={formData.priority2} onChange={handleChange}>
                     {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
-                </div>
+                </div> */}
 
                 <div className="form-group">
                   <label>Problem Statement * </label>

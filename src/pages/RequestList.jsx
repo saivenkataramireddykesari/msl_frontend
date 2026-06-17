@@ -95,12 +95,8 @@ const RequestList = () => {
     <div className="request-list-container">
 
       <div className="list-header">
-        <h1>Scientific Office Requests</h1>
-        {(user?.role === 'BL' || user?.role === 'BM') && (
-          <Link to="/requests/new" className="new-request-btn">
-            + New Request
-          </Link>
-        )}
+        {/* <h1>Scientific Office Requests</h1> */}
+        
       </div>
 
       {/* Classification Filter */}
@@ -122,6 +118,11 @@ const RequestList = () => {
                     : 'Default'}
             </button>
           ))}
+          {(user?.role === 'BL' || user?.role === 'BM') && (
+          <Link to="/requests/new" className="new-request-btn">
+            + New Request
+          </Link>
+        )}
         </div>
       </div>
 
@@ -166,15 +167,15 @@ const RequestList = () => {
             <thead>
               <tr>
                 <th>Request ID</th>
-                <th>Doctor</th>
                 <th>Region</th>
                 <th>Territory</th>
+                <th>Doctor</th>
                 <th>Objective(s)</th>
-                <th>Priority(s)</th>
-                <th>RX Status</th>
+                {/* <th>Priority</th> */}
+                <th>RX Status (Brand 1)</th>
+                <th>RX Status (Brand 2)</th>
                 <th>Brand(s)</th>
                 <th>Assigned To</th>
-                <th>Request Status</th>
                 <th>Number Of Visits</th>
                 <th>Requested By</th>
                 <th>Created</th>
@@ -186,9 +187,9 @@ const RequestList = () => {
               {filteredRequests.map((request) => (
                 <tr key={request.id}>
                   <td>#{request.id}</td>
-                  <td className="doctor-name">{request.doctor_name}</td>
                   <td>{request.region}</td>
                   <td>{request.territory}</td>
+                  <td className="doctor-name">{request.doctor_name}</td>
                   <td className="objective-cell">
                     {request.objective?.substring(0, 50)}
                     {request.objective?.length > 50 ? '...' : ''}
@@ -200,7 +201,7 @@ const RequestList = () => {
                       </>
                     )}
                   </td>
-                  <td>
+                  {/* <td>
                     {request.brand && request.priority && (
                       <span className={`priority-badge ${request.priority?.toLowerCase()}`}>
                         {request.priority}
@@ -212,15 +213,32 @@ const RequestList = () => {
                       </span>
                     )}
                     {(!request.brand || !request.priority) && (!request.brand2 || !request.priority2) && '—'}
+                  </td> */}
+                  <td>
+                    {request.brand ? (
+                      <span className={`status-badge ${(request.rx_status_brand1 || 'default')?.toLowerCase().replace(' ', '-')}`}>
+                        {request.rx_status_brand1 === 'potential'
+                          ? 'Potential User'
+                          : request.rx_status_brand1 === 'non-potential'
+                            ? 'Not a Potential User'
+                            : request.rx_status_brand1 || 'Default'}
+                      </span>
+                    ) : (
+                      <span className="no-brand">—</span>
+                    )}
                   </td>
                   <td>
-                    <span className={`status-badge ${request.user_classification?.toLowerCase().replace(' ', '-') || 'default'}`}>
-                      {request.user_classification === 'potential'
-                        ? 'Potential User'
-                        : request.user_classification === 'non-potential'
-                          ? 'Not a Potential User'
-                          : 'Default User'}
-                    </span>
+                    {request.brand2 ? (
+                      <span className={`status-badge ${(request.rx_status_brand2 || 'default')?.toLowerCase().replace(' ', '-')}`}>
+                        {request.rx_status_brand2 === 'potential'
+                          ? 'Potential User'
+                          : request.rx_status_brand2 === 'non-potential'
+                            ? 'Not a Potential User'
+                            : request.rx_status_brand2 || 'Default'}
+                      </span>
+                    ) : (
+                      <span className="no-brand">—</span>
+                    )}
                   </td>
                   <td>
                     {request.brand && <div>{request.brand}</div>}
@@ -233,11 +251,6 @@ const RequestList = () => {
                     ) : (
                       <span className="unassigned-badge">Unassigned</span>
                     )}
-                  </td>
-                  <td>
-                    <span className={`request-status-badge ${request.request_status === 'In Progress' ? 'in-progress' : 'pending'}`}>
-                      {request.request_status || 'Pending'}
-                    </span>
                   </td>
                   <td>
                     <span className="visits-count">{request.num_visits ?? 0}</span>

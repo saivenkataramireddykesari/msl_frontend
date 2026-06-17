@@ -30,17 +30,25 @@ const Navbar = () => {
   };
 
   const canAccessActivities = ['MSL', 'Scientific Officer', 'Asst General Manager', 'Associate Vice President'].includes(user?.role);
-  const canAccessMonthlyReport = ['Asst General Manager', 'Associate Vice President'].includes(user?.role);
+  const canAccessMonthlyReport = ['BM', 'Asst General Manager', 'Associate Vice President'].includes(user?.role);
+
+  // Determine landing page based on role
+  const getLandingPage = () => {
+    if (user?.role === 'BM') return '/monthly-report';
+    return '/requests';
+  };
 
   return (
     <nav className="navbar">
       <div className="navbar-brand">
-        <Link to="/dashboard">Scientific Office</Link>
+        <Link to={getLandingPage()}>Scientific Office</Link>
       </div>
 
       <div className="navbar-menu">
-        <Link to="/dashboard" className="nav-link">Dashboard</Link>
-        <Link to="/requests" className="nav-link">Requests</Link>
+        {/* <Link to="/dashboard" className="nav-link">Dashboard</Link> */}
+        {user?.role !== 'BM' && (
+          <Link to="/requests" className="nav-link">Requests</Link>
+        )}
         {canAccessActivities && (
           <Link to="/office-activities" className="nav-link">Activities</Link>
         )}

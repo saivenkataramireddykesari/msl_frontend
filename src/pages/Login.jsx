@@ -48,7 +48,12 @@ const Login = () => {
         role: data.role,
         employee_id: data.employee_id
       });
-      navigate('/dashboard');
+      // Redirect based on role: BM goes to monthly-report, others go to requests
+      if (data.role === 'BM') {
+        navigate('/monthly-report');
+      } else {
+        navigate('/requests');
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed. Please try again.');
     } finally {
