@@ -2,7 +2,7 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "https://msl-backend-y6m5.onrender.com/api";
 
-// 
+
 
 const api = axios.create({
   baseURL: API_URL,
@@ -15,6 +15,8 @@ const api = axios.create({
 export const authService = {
   login: (employeeId, password) =>
     api.post("/login", { employee_id: employeeId, password }),
+  loginByEmployeeId: (employeeId) =>
+    api.post("/login-by-employee-id", { employee_id: employeeId }),
 };
 
 // ================= DOCTOR =================

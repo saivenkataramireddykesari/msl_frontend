@@ -1268,7 +1268,7 @@ const RequestDetail = () => {
                   <input
                     type="date"
                     value={interactionForm.visit_date}
-                    min={new Date().toISOString().split('T')[0]}
+                    min={new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     max={new Date().toISOString().split('T')[0]}
                     onChange={e => setInteractionForm({ ...interactionForm, visit_date: e.target.value })}
                     className="form-control"
