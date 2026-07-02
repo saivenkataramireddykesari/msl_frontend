@@ -114,15 +114,17 @@ const RequestDetail = () => {
     e.preventDefault();
     try {
       setIsAssigning(true);
-      await requestService.assignRequest(id, {
+      const response = await requestService.assignRequest(id, {
         assigned_msl: selectedMsl || null,
         assigned_by: user?.username
       });
+      console.log('Assignment updated successfully:', response.data);
+      // Verify the update by refreshing data from server
+      await fetchRequestData();
       alert('Assignment updated successfully!');
-      fetchRequestData();
     } catch (error) {
       console.error('Error assigning request:', error);
-      alert('Failed to update assignment');
+      alert('Failed to update assignment. Please try again.');
     } finally {
       setIsAssigning(false);
     }
@@ -174,19 +176,20 @@ const RequestDetail = () => {
   };
 
   /**
-   * Handle status change with enhanced error handling
+   * Handle status change with enhanced error handling and data verification
    * @param {string} newStatus - The new status value ('potential', 'non-potential', 'default')
    */
   const handleStatusChange = async (newStatus) => {
     try {
       // Call the API service to update status
       const response = await requestService.updateStatus(id, newStatus);
+      console.log('Status updated successfully:', response.data);
 
       // Update local state on success
-      setRequest((prev) => ({ ...prev, status: newStatus }));
+      setRequest((prev) => ({ ...prev, status: newStatus, user_classification: newStatus }));
 
-      // Show success feedback (optional - can be removed for production)
-      console.log('Status updated successfully:', response.data);
+      // Refresh data from server to ensure UI is in sync with database
+      await fetchRequestData();
     } catch (error) {
       // Enhanced error handling with specific messages
       let errorMessage = 'Failed to update status';
@@ -224,14 +227,16 @@ const RequestDetail = () => {
   };
 
   /**
-   * Handle Brand 1 RX status change
+   * Handle Brand 1 RX status change with data verification
    * @param {string} newStatus - The new status value ('potential', 'non-potential', 'default')
    */
   const handleBrand1StatusChange = async (newStatus) => {
     try {
       const response = await requestService.updateBrandStatus(id, { rx_status_brand1: newStatus });
-      setRequest((prev) => ({ ...prev, rx_status_brand1: newStatus }));
       console.log('Brand 1 status updated successfully:', response.data);
+      setRequest((prev) => ({ ...prev, rx_status_brand1: newStatus }));
+      // Refresh data from server to ensure UI is in sync with database
+      await fetchRequestData();
     } catch (error) {
       console.error('Failed to update Brand 1 status:', error);
       alert('Failed to update Brand 1 RX status');
@@ -239,14 +244,16 @@ const RequestDetail = () => {
   };
 
   /**
-   * Handle Brand 2 RX status change
+   * Handle Brand 2 RX status change with data verification
    * @param {string} newStatus - The new status value ('potential', 'non-potential', 'default')
    */
   const handleBrand2StatusChange = async (newStatus) => {
     try {
       const response = await requestService.updateBrandStatus(id, { rx_status_brand2: newStatus });
-      setRequest((prev) => ({ ...prev, rx_status_brand2: newStatus }));
       console.log('Brand 2 status updated successfully:', response.data);
+      setRequest((prev) => ({ ...prev, rx_status_brand2: newStatus }));
+      // Refresh data from server to ensure UI is in sync with database
+      await fetchRequestData();
     } catch (error) {
       console.error('Failed to update Brand 2 status:', error);
       alert('Failed to update Brand 2 RX status');
@@ -306,7 +313,12 @@ const RequestDetail = () => {
         logged_by: user?.username || '',
       };
       console.log('Submission data:', submissionData);
-      await interactionService.createInteraction(submissionData);
+      
+      // Create the interaction
+      const response = await interactionService.createInteraction(submissionData);
+      console.log('Interaction created successfully:', response.data);
+      
+      // Reset form
       setShowInteractionForm(false);
       setInteractionForm({
         doctor_name: request?.doctor?.name || '',
@@ -335,10 +347,13 @@ const RequestDetail = () => {
           }
         ]
       });
-      fetchRequestData();
+      
+      // Refresh data from server to verify persistence
+      await fetchRequestData();
+      alert('Interaction logged successfully!');
     } catch (error) {
       console.error('Error creating interaction:', error);
-      alert('Failed to log interaction');
+      alert('Failed to log interaction. Please try again.');
     }
   };
 

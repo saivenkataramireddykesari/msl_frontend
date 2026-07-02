@@ -100,7 +100,7 @@ const OfficeActivities = () => {
     fetchMslUsers();
   };
 
-  /* -- Log activity submit -- */
+  /* -- Log activity submit with data verification -- */
   const handleActivitySubmit = async (e) => {
     e.preventDefault();
     
@@ -119,6 +119,7 @@ const OfficeActivities = () => {
       const response = await activityService.createActivity(submitData);
       console.log('DEBUG - Activity saved successfully:', response.data);
       
+      // Reset form
       setShowActivityForm(false);
       setActivityForm({
         activity_date: '',
@@ -127,7 +128,10 @@ const OfficeActivities = () => {
         linked_outputs: '',
         hours_worked: '',
       });
-      fetchActivities(user.username);
+      
+      // Refresh data from server to verify persistence
+      await fetchActivities(user.username);
+      alert('Activity logged successfully!');
     } catch (err) {
       console.error('ERROR - Failed to save activity:', err);
       console.error('Error response:', err.response?.data);

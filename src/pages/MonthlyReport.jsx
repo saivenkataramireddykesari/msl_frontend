@@ -198,24 +198,26 @@ const MonthlyReport = () => {
             </div>
           </div>
 
-          {/* Employee Selector */}
-          <div className="employee-selector">
-            <h3>Select Employee to View Details</h3>
-            <div className="employee-tabs">
-              {report.employees.map((emp) => (
-                <button
-                  key={emp.employee_id}
-                  className={`employee-tab ${
-                    selectedEmployee?.employee_id === emp.employee_id ? "active" : ""
-                  }`}
-                  onClick={() => setSelectedEmployee(emp)}
-                >
-                  <span className="tab-name">{emp.employee_name}</span>
-                  <span className="tab-id">({emp.employee_id})</span>
-                </button>
-              ))}
+          {/* Employee Selector - Hidden for managers */}
+          {user?.role !== "Asst General Manager" && user?.role !== "Associate Vice President" && (
+            <div className="employee-selector">
+              <h3>Select Employee to View Details</h3>
+              <div className="employee-tabs">
+                {report.employees.map((emp) => (
+                  <button
+                    key={emp.employee_id}
+                    className={`employee-tab ${
+                      selectedEmployee?.employee_id === emp.employee_id ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedEmployee(emp)}
+                  >
+                    <span className="tab-name">{emp.employee_name}</span>
+                    <span className="tab-id">({emp.employee_id})</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Employee Detail View */}
           {selectedEmployee && (

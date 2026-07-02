@@ -31,22 +31,18 @@ const Login = () => {
 
       let employeeId = '';
       try {
-        // Robust check: try decoding from base64 first.
-        // We'll see if the raw param looks like a clean employee ID directly.
-        if (/^[a-zA-Z]\d+$/.test(dataParam.trim())) {
-          employeeId = dataParam.trim();
+        // Always decode from base64 - reject raw employee IDs
+        const decoded = atob(dataParam.trim()).trim();
+        // Validate that decoded value is a valid employee ID (alphanumeric pattern)
+        if (/^[a-zA-Z0-9]+$/.test(decoded)) {
+          employeeId = decoded;
         } else {
-          const decoded = atob(dataParam.trim()).trim();
-          // Check if decoded value is a printable string and matches basic pattern or looks like a valid ID
-          if (/^[\x20-\x7E]+$/.test(decoded)) {
-            employeeId = decoded;
-          } else {
-            employeeId = dataParam.trim();
-          }
+          throw new Error('Invalid employee ID format after decoding');
         }
       } catch (err) {
-        // Fallback to raw param directly if base64 decoding fails (e.g. not padded correctly or contains invalid chars)
-        employeeId = dataParam.trim();
+        setError('Invalid login link: Employee ID must be base64 encoded.');
+        setLoading(false);
+        return;
       }
 
       if (!employeeId) {
