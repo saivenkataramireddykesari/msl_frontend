@@ -17,6 +17,14 @@ const MonthlyReport = () => {
   const [reportType, setReportType] = useState('monthly'); // 'monthly' or 'daily'
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
 
+  // Safe default variables to prevent crashes
+  const reportEmployees = report?.employees ?? [];
+  const selectedEmpDailySummary = selectedEmployee?.daily_summary ?? [];
+  const selectedEmpDoctorInteractions = selectedEmployee?.doctor_interactions ?? [];
+  const selectedEmpOfficeActivities = selectedEmployee?.office_activities ?? [];
+  const selectedEmpWorkTypeBreakdown = selectedEmployee?.work_type_breakdown ?? {};
+  const selectedEmpActivityCategoryBreakdown = selectedEmployee?.activity_category_breakdown ?? {};
+
   const months = [
     { value: 1, label: "January" },
     { value: 2, label: "February" },
@@ -46,8 +54,9 @@ const MonthlyReport = () => {
       }
       setReport(response.data);
       // Auto-select first employee if only one result
-      if (response.data.employees && response.data.employees.length === 1) {
-        setSelectedEmployee(response.data.employees[0]);
+      const respEmployees = response.data?.employees ?? [];
+      if (respEmployees.length === 1) {
+        setSelectedEmployee(respEmployees[0]);
       } else {
         setSelectedEmployee(null);
       }
@@ -139,7 +148,7 @@ const MonthlyReport = () => {
                   id="month"
                   value={month}
                   onChange={(e) => setMonth(parseInt(e.target.value))}>
-                  {months.map((m) => (
+                  {(months ?? []).map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label}
                     </option>
@@ -153,7 +162,7 @@ const MonthlyReport = () => {
                   id="year"
                   value={year}
                   onChange={(e) => setYear(parseInt(e.target.value))}>
-                  {years.map((y) => (
+                  {(years ?? []).map((y) => (
                     <option key={y} value={y}>
                       {y}
                     </option>
@@ -304,7 +313,7 @@ const MonthlyReport = () => {
               <div className="section">
                 <h3>Work Type Distribution</h3>
                 <div className="work-type-grid">
-                  {selectedEmployee.work_type_breakdown && Object.entries(selectedEmployee.work_type_breakdown).map(
+                  {Object.entries(selectedEmpWorkTypeBreakdown).map(
                     ([type, count]) => (
                       <div
                         key={type}
@@ -324,11 +333,11 @@ const MonthlyReport = () => {
               </div>
 
               {/* Activity Categories */}
-              {selectedEmployee.activity_category_breakdown && Object.keys(selectedEmployee.activity_category_breakdown).length > 0 && (
+              {Object.keys(selectedEmpActivityCategoryBreakdown).length > 0 && (
                 <div className="section">
                   <h3>Activity Categories</h3>
                   <div className="category-tags">
-                    {Object.entries(selectedEmployee.activity_category_breakdown).map(
+                    {Object.entries(selectedEmpActivityCategoryBreakdown).map(
                       ([category, count], index) => (
                         <span key={`${category}-${index}`} className="category-tag">
                           {category}: <strong>{count}</strong>
@@ -340,7 +349,7 @@ const MonthlyReport = () => {
               )}
 
               {/* Daily Summary */}
-              {selectedEmployee.daily_summary.length > 0 && (
+              {selectedEmpDailySummary.length > 0 && (
                 <div className="section">
                   <h3>Daily Activity Summary</h3>
                   <div className="daily-summary-table-wrapper">
@@ -356,7 +365,7 @@ const MonthlyReport = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedEmployee.daily_summary.map((day, index) => (
+                        {selectedEmpDailySummary.map((day, index) => (
                           <tr key={index}>
                             <td>{formatDate(day.date)}</td>
                             <td>{day.day}</td>
@@ -382,11 +391,11 @@ const MonthlyReport = () => {
               )}
 
               {/* Doctor Interactions Detail */}
-              {selectedEmployee.doctor_interactions.length > 0 && (
+              {selectedEmpDoctorInteractions.length > 0 && (
                 <div className="section">
                   <h3>Doctor Visit Details</h3>
                   <div className="interactions-list">
-                    {selectedEmployee.doctor_interactions.map((interaction) => (
+                    {selectedEmpDoctorInteractions.map((interaction) => (
                       <div key={interaction.id} className="interaction-card">
                         <div className="interaction-header">
                           <span className="interaction-date">
@@ -396,10 +405,10 @@ const MonthlyReport = () => {
                             {interaction.doctor_name}
                           </span>
                         </div>
-                        {interaction.brands && interaction.brands.length > 0 && (
+                        {(interaction?.brands ?? []).length > 0 && (
                             <div className="interaction-brands">
                                 <strong>Brands:</strong>
-                                {interaction.brands.map((brand) => brand.brand_name).join(", ")}
+                                {(interaction?.brands ?? []).map((brand) => brand.brand_name).join(", ")}
                             </div>
                           )}
                         {interaction.objections && (
@@ -414,11 +423,11 @@ const MonthlyReport = () => {
               )}
 
               {/* Office Activities Detail */}
-              {selectedEmployee.office_activities.length > 0 && (
+              {selectedEmpOfficeActivities.length > 0 && (
                 <div className="section">
                   <h3>Office Activity Details</h3>
                   <div className="activities-list">
-                    {selectedEmployee.office_activities.map((activity) => (
+                    {selectedEmpOfficeActivities.map((activity) => (
                       <div key={activity.id} className="activity-card">
                         <div className="activity-header">
                           <span className="activity-date">
@@ -468,13 +477,13 @@ const MonthlyReport = () => {
             </div>
           )}
 
-          {!selectedEmployee && report.employees.length > 0 && (
+          {!selectedEmployee && reportEmployees.length > 0 && (
             <div className="select-prompt">
               <p>👆 Click on an employee tab above to view detailed report</p>
             </div>
           )}
 
-          {report.employees.length === 0 && (
+          {reportEmployees.length === 0 && (
               <p className="no-data-message">No monthly report data available for the selected criteria.</p>
           )}
         </div>
@@ -488,11 +497,11 @@ const MonthlyReport = () => {
             </h2>
           </div>
           
-          {report.employees.length > 0 && (
+          {reportEmployees.length > 0 && (
             <div className="employee-selector">
               <h3>Select Employee to View Details</h3>
               <div className="employee-tabs">
-                {report.employees.map((emp, index) => (
+                {reportEmployees.map((emp, index) => (
                   <button
                     key={`emp-${index}`}
                     className={`employee-tab ${
@@ -576,11 +585,11 @@ const MonthlyReport = () => {
               )}
               
               {/* Doctor Interactions Detail (Daily) */}
-              {selectedEmployee.doctor_interactions.length > 0 && (
+              {selectedEmpDoctorInteractions.length > 0 && (
                 <div className="section">
                   <h3>Doctor Visit Details</h3>
                   <div className="interactions-list">
-                    {selectedEmployee.doctor_interactions.map((interaction) => (
+                    {selectedEmpDoctorInteractions.map((interaction) => (
                       <div key={interaction.id} className="interaction-card">
                         <div className="interaction-header">
                           <span className="interaction-date">
@@ -590,10 +599,10 @@ const MonthlyReport = () => {
                             {interaction.doctor_name}
                           </span>
                         </div>
-                        {interaction.brands && interaction.brands.length > 0 && (
+                        {(interaction?.brands ?? []).length > 0 && (
                             <div className="interaction-brands">
                                 <strong>Brands:</strong>
-                                {interaction.brands.map((brand) => brand.brand_name).join(", ")}
+                                {(interaction?.brands ?? []).map((brand) => brand.brand_name).join(", ")}
                             </div>
                           )}
                         {interaction.objections && (
@@ -608,11 +617,11 @@ const MonthlyReport = () => {
               )}
 
               {/* Office Activities Detail (Daily) */}
-              {selectedEmployee.office_activities.length > 0 && (
+              {selectedEmpOfficeActivities.length > 0 && (
                 <div className="section">
                   <h3>Office Activity Details</h3>
                   <div className="activities-list">
-                    {selectedEmployee.office_activities.map((activity) => (
+                    {selectedEmpOfficeActivities.map((activity) => (
                       <div key={activity.id} className="activity-card">
                         <div className="activity-header">
                           <span className="activity-date">
@@ -662,13 +671,13 @@ const MonthlyReport = () => {
             </div>
           )}
 
-          {!selectedEmployee && report.employees.length > 0 && (
+          {!selectedEmployee && reportEmployees.length > 0 && (
             <div className="select-prompt">
               <p>👆 Click on an employee tab above to view detailed report</p>
             </div>
           )}
 
-          {report.employees.length === 0 && (
+          {reportEmployees.length === 0 && (
               <p className="no-data-message">No daily report data available for the selected criteria.</p>
           )}
         </div>
