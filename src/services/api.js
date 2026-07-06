@@ -2,7 +2,7 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "https://msl-backend-y6m5.onrender.com/api";
 
-
+// https://msl-backend-y6m5.onrender.com
 
 const api = axios.create({
   baseURL: API_URL,
@@ -19,6 +19,16 @@ export const authService = {
     api.post("/login-by-employee-id", { employee_id: employeeId }),
 };
 
+
+// ================= BRAND =================
+export const brandService = {
+  getBrands: (division = null) => {
+    const params = new URLSearchParams();
+    if (division) params.append("division", division);
+    return api.get(`/brands?${params.toString()}`);
+  },
+};
+
 // ================= DOCTOR =================
 export const doctorService = {
   getDoctors: (priorityOnly = false) =>
@@ -28,10 +38,21 @@ export const doctorService = {
   duplicateDoctor: (id) => api.post(`/doctors/${id}/duplicate`),
   deleteDoctor: (id) => api.delete(`/doctors/${id}`),
   
-  // Cascading dropdown APIs for BL location-based filtering
-  getRegionsByBL: (blTerritory = null) => {
+  searchDoctors: (searchTerm, region = null, territory = null, patch = null, blTerritory = null) => {
     const params = new URLSearchParams();
+    params.append("search", searchTerm);
+    if (region) params.append("region", region);
+    if (territory) params.append("territory", territory);
+    if (patch) params.append("patch", patch);
     if (blTerritory) params.append("bl_territory", blTerritory);
+    return api.get(`/doctors/search?${params.toString()}`);
+  },
+  
+  // Cascading dropdown APIs for BL location-based filtering
+  getRegionsByBL: (currentUserId = null, currentUserRole = null) => {
+    const params = new URLSearchParams();
+    if (currentUserId) params.append("current_user_employee_id", currentUserId);
+    if (currentUserRole) params.append("current_user_role", currentUserRole);
     return api.get(`/doctors/regions?${params.toString()}`);
   },
   
@@ -205,6 +226,15 @@ export const reportService = {
       params.append("employee_ids", employeeIds);
     }
     return api.get(`/reports/monthly-summary?${params.toString()}`);
+  },
+
+  getDailySummary: (reportDate, employeeIds = null) => {
+    const params = new URLSearchParams();
+    params.append("report_date", reportDate);
+    if (employeeIds) {
+      params.append("employee_ids", employeeIds);
+    }
+    return api.get(`/reports/daily-summary?${params.toString()}`);
   },
 };
 

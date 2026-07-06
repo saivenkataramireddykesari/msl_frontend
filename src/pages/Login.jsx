@@ -59,7 +59,10 @@ const Login = () => {
         login({
           username: data.username,
           role: data.role,
-          employee_id: data.employee_id
+          employee_id: data.employee_id,
+          bl_territory: data.bl_territory,
+          bl_region: data.bl_region,
+          division: data.division
         });
 
         // Redirect based on role: BM goes to monthly-report, others go to requests

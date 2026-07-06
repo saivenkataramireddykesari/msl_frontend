@@ -14,6 +14,8 @@ const MonthlyReport = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [reportType, setReportType] = useState('monthly'); // 'monthly' or 'daily'
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
 
   const months = [
     { value: 1, label: "January" },
@@ -36,9 +38,19 @@ const MonthlyReport = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await reportService.getMonthlySummary(month, year, employeeIds);
+      let response;
+      if (reportType === 'monthly') {
+        response = await reportService.getMonthlySummary(month, year, employeeIds);
+      } else {
+        response = await reportService.getDailySummary(selectedDate, employeeIds);
+      }
       setReport(response.data);
-      setSelectedEmployee(null);
+      // Auto-select first employee if only one result
+      if (response.data.employees && response.data.employees.length === 1) {
+        setSelectedEmployee(response.data.employees[0]);
+      } else {
+        setSelectedEmployee(null);
+      }
     } catch (err) {
       console.error("Error fetching report:", err);
       setError(err.response?.data?.detail || "Failed to fetch report");
@@ -59,7 +71,7 @@ const MonthlyReport = () => {
     if (user) {
       fetchReport();
     }
-  }, [user, navigate]);
+  }, [user, navigate, reportType, month, year, selectedDate]); // Add dependencies for re-fetching on filter change
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -90,43 +102,78 @@ const MonthlyReport = () => {
   return (
     <div className="monthly-report">
       <div className="report-header">
-        <h1>Monthly Employee Working Summary</h1>
+        <h1>Employee Working Summary</h1>
         <p className="report-subtitle">
           Detailed report of employee activities, doctor visits, and office work
         </p>
       </div>
 
       <div className="report-filters">
-        <form onSubmit={handleSubmit} className="filters-form">
-          <div className="filter-group">
-            <label htmlFor="month">Month</label>
-            <select
-              id="month"
-              value={month}
-              onChange={(e) => setMonth(parseInt(e.target.value))}
-            >
-              {months.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="report-type-selector">
+          <label>
+            <input
+              type="radio"
+              value="monthly"
+              checked={reportType === 'monthly'}
+              onChange={() => setReportType('monthly')}
+            />
+            Monthly Report
+          </label>
+          <label>
+            <input
+              type="radio"
+              value="daily"
+              checked={reportType === 'daily'}
+              onChange={() => setReportType('daily')}
+            />
+            Daily Report
+          </label>
+        </div>
 
-          <div className="filter-group">
-            <label htmlFor="year">Year</label>
-            <select
-              id="year"
-              value={year}
-              onChange={(e) => setYear(parseInt(e.target.value))}
-            >
-              {years.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </div>
+        <form onSubmit={handleSubmit} className="filters-form">
+          {reportType === 'monthly' && (
+            <>
+              <div className="filter-group">
+                <label htmlFor="month">Month</label>
+                <select
+                  id="month"
+                  value={month}
+                  onChange={(e) => setMonth(parseInt(e.target.value))}>
+                  {months.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="filter-group">
+                <label htmlFor="year">Year</label>
+                <select
+                  id="year"
+                  value={year}
+                  onChange={(e) => setYear(parseInt(e.target.value))}>
+                  {years.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          {reportType === 'daily' && (
+            <div className="filter-group">
+              <label htmlFor="reportDate">Date</label>
+              <input
+                type="date"
+                id="reportDate"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+              />
+            </div>
+          )}
 
           <div className="filter-group filter-group-large">
             <label htmlFor="employeeIds">Employee IDs (comma-separated)</label>
@@ -155,11 +202,11 @@ const MonthlyReport = () => {
       {loading && (
         <div className="loading-container">
           <div className="loading-spinner"></div>
-          <p>Generating monthly report...</p>
+          <p>Generating report...</p>
         </div>
       )}
 
-      {report && !loading && (
+      {report && !loading && reportType === 'monthly' && (
         <div className="report-content">
           {/* Overall Summary */}
           <div className="overall-summary">
@@ -198,26 +245,7 @@ const MonthlyReport = () => {
             </div>
           </div>
 
-          {/* Employee Selector - Hidden for managers */}
-          {user?.role !== "Asst General Manager" && user?.role !== "Associate Vice President" && (
-            <div className="employee-selector">
-              <h3>Select Employee to View Details</h3>
-              <div className="employee-tabs">
-                {report.employees.map((emp) => (
-                  <button
-                    key={emp.employee_id}
-                    className={`employee-tab ${
-                      selectedEmployee?.employee_id === emp.employee_id ? "active" : ""
-                    }`}
-                    onClick={() => setSelectedEmployee(emp)}
-                  >
-                    <span className="tab-name">{emp.employee_name}</span>
-                    <span className="tab-id">({emp.employee_id})</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+
 
           {/* Employee Detail View */}
           {selectedEmployee && (
@@ -276,7 +304,7 @@ const MonthlyReport = () => {
               <div className="section">
                 <h3>Work Type Distribution</h3>
                 <div className="work-type-grid">
-                  {Object.entries(selectedEmployee.work_type_breakdown).map(
+                  {selectedEmployee.work_type_breakdown && Object.entries(selectedEmployee.work_type_breakdown).map(
                     ([type, count]) => (
                       <div
                         key={type}
@@ -296,13 +324,13 @@ const MonthlyReport = () => {
               </div>
 
               {/* Activity Categories */}
-              {Object.keys(selectedEmployee.activity_category_breakdown).length > 0 && (
+              {selectedEmployee.activity_category_breakdown && Object.keys(selectedEmployee.activity_category_breakdown).length > 0 && (
                 <div className="section">
                   <h3>Activity Categories</h3>
                   <div className="category-tags">
                     {Object.entries(selectedEmployee.activity_category_breakdown).map(
-                      ([category, count]) => (
-                        <span key={category} className="category-tag">
+                      ([category, count], index) => (
+                        <span key={`${category}-${index}`} className="category-tag">
                           {category}: <strong>{count}</strong>
                         </span>
                       )
@@ -368,29 +396,15 @@ const MonthlyReport = () => {
                             {interaction.doctor_name}
                           </span>
                         </div>
-                        {interaction.brand_discussed && (
-                          <div className="interaction-brand">
-                            Brand: {interaction.brand_discussed}
-                          </div>
-                        )}
-                        {interaction.interest_level && (
-                          <div className="interaction-interest">
-                            Interest Level: {interaction.interest_level}
-                          </div>
-                        )}
-                        {interaction.topics_discussed && (
-                          <div className="interaction-topics">
-                            <strong>Topics:</strong> {interaction.topics_discussed}
-                          </div>
-                        )}
-                        {interaction.summary && (
-                          <div className="interaction-summary">
-                            <strong>Summary:</strong> {interaction.summary}
-                          </div>
-                        )}
-                        {interaction.outcomes && (
-                          <div className="interaction-outcomes">
-                            <strong>Outcomes:</strong> {interaction.outcomes}
+                        {interaction.brands && interaction.brands.length > 0 && (
+                            <div className="interaction-brands">
+                                <strong>Brands:</strong>
+                                {interaction.brands.map((brand) => brand.brand_name).join(", ")}
+                            </div>
+                          )}
+                        {interaction.objections && (
+                          <div className="interaction-objections">
+                            Objections: {interaction.objections}
                           </div>
                         )}
                       </div>
@@ -459,6 +473,210 @@ const MonthlyReport = () => {
               <p>👆 Click on an employee tab above to view detailed report</p>
             </div>
           )}
+
+          {report.employees.length === 0 && (
+              <p className="no-data-message">No monthly report data available for the selected criteria.</p>
+          )}
+        </div>
+      )}
+
+      {report && !loading && reportType === 'daily' && (
+        <div className="report-content">
+          <div className="overall-summary">
+            <h2>
+              {report.report_day_name}, {formatDate(report.report_date)} - Daily Summary
+            </h2>
+          </div>
+          
+          {report.employees.length > 0 && (
+            <div className="employee-selector">
+              <h3>Select Employee to View Details</h3>
+              <div className="employee-tabs">
+                {report.employees.map((emp, index) => (
+                  <button
+                    key={`emp-${index}`}
+                    className={`employee-tab ${
+                      selectedEmployee?.employee_id === emp.employee_id ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedEmployee(emp)}
+                  >
+                    <span className="tab-name">{emp.employee_name}</span>
+                    <span className="tab-id">({emp.employee_id})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedEmployee && (
+            <div className="employee-detail">
+              <div className="detail-header">
+                <h2>
+                  {selectedEmployee.employee_name}{" "}
+                  <span className="detail-id">({selectedEmployee.employee_id})</span>
+                </h2>
+                <span className="detail-period">
+                  {selectedEmployee.day_name}, {formatDate(selectedEmployee.report_date)}
+                </span>
+              </div>
+
+              {/* Employee Summary Cards (Daily) */}
+              <div className="summary-cards employee-cards">
+                <div className="summary-card">
+                  <div className="card-icon">🩺</div>
+                  <div className="card-content">
+                    <span className="card-value">
+                      {selectedEmployee.total_doctor_visits}
+                    </span>
+                    <span className="card-label">Doctor Visits</span>
+                  </div>
+                </div>
+                <div className="summary-card">
+                  <div className="card-icon">👨‍⚕️</div>
+                  <div className="card-content">
+                    <span className="card-value">
+                      {selectedEmployee.unique_doctors_visited}
+                    </span>
+                    <span className="card-label">Unique Doctors</span>
+                  </div>
+                </div>
+                <div className="summary-card">
+                  <div className="card-icon">📝</div>
+                  <div className="card-content">
+                    <span className="card-value">
+                      {selectedEmployee.total_office_activities}
+                    </span>
+                    <span className="card-label">Office Activities</span>
+                  </div>
+                </div>
+                <div className="summary-card">
+                  <div className="card-icon">🕐</div>
+                  <div className="card-content">
+                    <span className="card-value">
+                      {selectedEmployee.total_hours_worked}
+                    </span>
+                    <span className="card-label">Hours Worked</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Work Type for the Day */}
+              {selectedEmployee.work_type && selectedEmployee.work_type !== "nothing done" && (
+                <div className="section">
+                  <h3>Work Type</h3>
+                  <div className="work-type-single">
+                    <span
+                      className="work-type-badge large"
+                      style={{ backgroundColor: getWorkTypeColor(selectedEmployee.work_type) }}
+                    >
+                      {selectedEmployee.work_type}
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Doctor Interactions Detail (Daily) */}
+              {selectedEmployee.doctor_interactions.length > 0 && (
+                <div className="section">
+                  <h3>Doctor Visit Details</h3>
+                  <div className="interactions-list">
+                    {selectedEmployee.doctor_interactions.map((interaction) => (
+                      <div key={interaction.id} className="interaction-card">
+                        <div className="interaction-header">
+                          <span className="interaction-date">
+                            {formatDate(interaction.visit_date)}
+                          </span>
+                          <span className="interaction-doctor">
+                            {interaction.doctor_name}
+                          </span>
+                        </div>
+                        {interaction.brands && interaction.brands.length > 0 && (
+                            <div className="interaction-brands">
+                                <strong>Brands:</strong>
+                                {interaction.brands.map((brand) => brand.brand_name).join(", ")}
+                            </div>
+                          )}
+                        {interaction.objections && (
+                          <div className="interaction-objections">
+                            Objections: {interaction.objections}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Office Activities Detail (Daily) */}
+              {selectedEmployee.office_activities.length > 0 && (
+                <div className="section">
+                  <h3>Office Activity Details</h3>
+                  <div className="activities-list">
+                    {selectedEmployee.office_activities.map((activity) => (
+                      <div key={activity.id} className="activity-card">
+                        <div className="activity-header">
+                          <span className="activity-date">
+                            {formatDate(activity.activity_date)}
+                          </span>
+                          <span className="activity-category">
+                            {activity.activity_category}
+                          </span>
+                        </div>
+                        {activity.hours_worked > 0 && (
+                          <div className="activity-hours">
+                            Hours: {activity.hours_worked}
+                          </div>
+                        )}
+                        {activity.doctors_visited > 0 && (
+                          <div className="activity-doctors">
+                            Doctors Visited: {activity.doctors_visited}
+                          </div>
+                        )}
+                        {activity.work_type && (
+                          <div className="activity-work-type">
+                            <span
+                              className="work-type-badge"
+                              style={{
+                                backgroundColor: getWorkTypeColor(activity.work_type),
+                              }}
+                            >
+                              {activity.work_type}
+                            </span>
+                          </div>
+                        )}
+                        {activity.summary && (
+                          <div className="activity-summary">
+                            <strong>Summary:</strong> {activity.summary}
+                          </div>
+                        )}
+                        {activity.linked_outputs && (
+                          <div className="activity-outputs">
+                            <strong>Linked Outputs:</strong> {activity.linked_outputs}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!selectedEmployee && report.employees.length > 0 && (
+            <div className="select-prompt">
+              <p>👆 Click on an employee tab above to view detailed report</p>
+            </div>
+          )}
+
+          {report.employees.length === 0 && (
+              <p className="no-data-message">No daily report data available for the selected criteria.</p>
+          )}
+        </div>
+      )}
+
+      {!report && !loading && !error && (
+        <div className="initial-message">
+          <p>Select criteria and generate a report to see employee activity.</p>
         </div>
       )}
     </div>

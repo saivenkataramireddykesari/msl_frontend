@@ -1,23 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { requestService, interactionService, userService } from '../services/api';
+import { requestService, interactionService, userService, brandService } from '../services/api';
 import '../styles/RequestDetail.css';
 
 // const STATUSES = ['default', 'potential', 'non-potential'];
 
-const BRAND_OPTIONS = [
-  'Aztor',
-  'Aztor-EZ',
-  'Azsita',
-  'Novastat',
-  'Novastat-EZ',
-  'Rosave',
-  'Rosave-C',
-  'Rosave-Trio',
-  'Rozucor',
-  'Other',
-];
+// BRAND_OPTIONS removed — brands are now fetched dynamically from /api/brands
+
 
 const INTEREST_LEVEL_OPTIONS = ['Low', 'Moderate', 'High', 'Very High'];
 
@@ -48,6 +38,12 @@ const RequestDetail = () => {
   const [error, setError] = useState(null);
   // Previous MSL activity panel
   const [prevMslPanel, setPrevMslPanel] = useState(null); // { mslName, visits[] }
+
+  // Brand typeahead states
+  const [allBrands, setAllBrands] = useState([]);           // full list from DB
+  const [brandSearchTerms, setBrandSearchTerms] = useState(['']); // per-brand input text
+  const [brandDropdownVisible, setBrandDropdownVisible] = useState([false]); // per-brand dropdown
+  const brandInputRefs = useRef([]);                        // refs for click-outside handling
 
   // Form states
   const [interactionForm, setInteractionForm] = useState({
@@ -86,7 +82,70 @@ const RequestDetail = () => {
 
   useEffect(() => {
     fetchRequestData();
+    fetchAllBrands(); // load brands for typeahead
   }, [id]);
+
+  // Fetch all brands from DB for typeahead suggestions
+  const fetchAllBrands = async () => {
+    try {
+      const res = await brandService.getBrands(); // no division filter — get all
+      setAllBrands(res.data || []);
+    } catch (err) {
+      console.error('Error fetching brands for typeahead:', err);
+    }
+  };
+
+  // Close brand dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      brandInputRefs.current.forEach((ref, idx) => {
+        if (ref && !ref.contains(e.target)) {
+          setBrandDropdownVisible(prev => {
+            const next = [...prev];
+            next[idx] = false;
+            return next;
+          });
+        }
+      });
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Helper: filter brands by search term
+  const getFilteredBrands = (term) => {
+    if (!term) return allBrands;
+    const lower = term.toLowerCase();
+    return allBrands.filter(b => b.brandname.toLowerCase().includes(lower));
+  };
+
+  // Handle brand name search input change (per brand entry)
+  const handleBrandSearchChange = (index, value) => {
+    const newTerms = [...brandSearchTerms];
+    newTerms[index] = value;
+    setBrandSearchTerms(newTerms);
+
+    const newVisible = [...brandDropdownVisible];
+    newVisible[index] = true;
+    setBrandDropdownVisible(newVisible);
+
+    // Clear the actual brand_name if user is typing fresh
+    handleBrandChange(index, 'brand_name', '');
+  };
+
+  // Handle selecting a brand from the dropdown
+  const handleBrandSelect = (index, brandname) => {
+    const newTerms = [...brandSearchTerms];
+    newTerms[index] = brandname;
+    setBrandSearchTerms(newTerms);
+
+    const newVisible = [...brandDropdownVisible];
+    newVisible[index] = false;
+    setBrandDropdownVisible(newVisible);
+
+    handleBrandChange(index, 'brand_name', brandname);
+  };
+
 
   useEffect(() => {
     if (isManager) {
@@ -96,12 +155,11 @@ const RequestDetail = () => {
 
   const fetchMslUsers = async () => {
     try {
-      // Use /api/users and filter client-side for broad compatibility
-      const res = await userService.getUsers();
-      const msls = res.data.filter(u => ['MSL', 'Scientific Officer'].includes(u.role));
-      setMslList(msls);
+      // getMslUsers() returns [{id, username, employee_id, role}] already filtered to MSL + Scientific Officer
+      const res = await userService.getMslUsers();
+      setMslList(res.data);
     } catch (err) {
-      console.error('Error fetching MSLs:', err);
+      console.error('Error fetching MSLs/SOs:', err);
     }
   };
 
@@ -260,7 +318,7 @@ const RequestDetail = () => {
     }
   };
 
-  // Handle adding a new brand entry
+  // Handle adding a new brand entry — also extend search term & dropdown arrays
   const handleAddBrand = () => {
     setInteractionForm(prev => ({
       ...prev,
@@ -277,14 +335,18 @@ const RequestDetail = () => {
         }
       ]
     }));
+    setBrandSearchTerms(prev => [...prev, '']);
+    setBrandDropdownVisible(prev => [...prev, false]);
   };
 
-  // Handle removing a brand entry
+  // Handle removing a brand entry — also shrink search term & dropdown arrays
   const handleRemoveBrand = (index) => {
     setInteractionForm(prev => ({
       ...prev,
       brands: prev.brands.filter((_, i) => i !== index)
     }));
+    setBrandSearchTerms(prev => prev.filter((_, i) => i !== index));
+    setBrandDropdownVisible(prev => prev.filter((_, i) => i !== index));
   };
 
   // Handle brand field changes
@@ -347,6 +409,9 @@ const RequestDetail = () => {
           }
         ]
       });
+      // Reset brand typeahead state
+      setBrandSearchTerms(['']);
+      setBrandDropdownVisible([false]);
       
       // Refresh data from server to verify persistence
       await fetchRequestData();
@@ -441,10 +506,6 @@ const RequestDetail = () => {
           <div className="info-item">
             <label>Doctor</label>
             <span className="info-value">{request.doctor?.name}</span>
-          </div>
-          <div className="info-item">
-            <label>Therapy Area</label>
-            <span className="info-value">{request.therapy_area}</span>
           </div>
           <div className="info-item">
             <label>Requested By</label>
@@ -1341,18 +1402,56 @@ const RequestDetail = () => {
                   </div>
                   
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
-                    <div className="form-group" style={{ margin: 0 }}>
+                    <div className="form-group" style={{ margin: 0, position: 'relative' }} ref={el => brandInputRefs.current[index] = el}>
                       <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Brand Name *</label>
-                      <select
-                        value={brand.brand_name}
-                        onChange={e => handleBrandChange(index, 'brand_name', e.target.value)}
+                      <input
+                        type="text"
+                        value={brandSearchTerms[index] ?? brand.brand_name}
+                        onChange={e => handleBrandSearchChange(index, e.target.value)}
+                        onFocus={() => {
+                          const newVisible = [...brandDropdownVisible];
+                          newVisible[index] = true;
+                          setBrandDropdownVisible(newVisible);
+                        }}
                         className="form-control"
                         style={{ marginTop: '4px' }}
+                        placeholder="Type or select a brand..."
                         required={index === 0}
-                      >
-                        <option value="">Select Brand</option>
-                        {BRAND_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
+                        autoComplete="off"
+                      />
+                      {brandDropdownVisible[index] && getFilteredBrands(brandSearchTerms[index]).length > 0 && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          background: '#fff',
+                          border: '1px solid #ced4da',
+                          borderRadius: '0.25rem',
+                          zIndex: 2000,
+                          maxHeight: '180px',
+                          overflowY: 'auto',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        }}>
+                          {getFilteredBrands(brandSearchTerms[index]).map(b => (
+                            <div
+                              key={b.id}
+                              onMouseDown={e => { e.preventDefault(); handleBrandSelect(index, b.brandname); }}
+                              style={{
+                                padding: '8px 12px',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid #eee',
+                                fontSize: '13px',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
+                              onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                            >
+                              <strong>{b.brandname}</strong>
+                              {b.divisionname && <span style={{ color: '#6b7280', fontSize: '11px', marginLeft: '6px' }}>({b.divisionname})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Interest Level</label>

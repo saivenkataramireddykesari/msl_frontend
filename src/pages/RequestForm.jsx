@@ -1,36 +1,32 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { doctorService, requestService, interactionService } from '../services/api';
+import { doctorService, requestService, interactionService, brandService } from '../services/api';
 import '../styles/RequestForm.css';
 
 const PRIORITIES = ['High', 'Medium', 'Low'];
-
-const BRAND_OPTIONS = [
-  'Aztor',
-  'Aztor-EZ',
-  'Azsita',
-  'Novastat',
-  'Novastat-EZ',
-  'Rosave',
-  'Rosave-C',
-  'Rosave-Trio',
-  'Rozucor',
-  'Other',
-];
 
 const RequestForm = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const selectedDoctorId = location.state?.selectedDoctorId;
-  const brandDropdownRef = useRef(null); // Add this ref
+  const brandDropdownRef = useRef(null);
+  const doctorInputRef = useRef(null); // Ref for doctor input and suggestions
+
+  // State for doctor search and selection
+  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
+  const [suggestedDoctors, setSuggestedDoctors] = useState([]);
+  const [showDoctorSuggestions, setShowDoctorSuggestions] = useState(false);
+  const [selectedDoctorName, setSelectedDoctorName] = useState('');
 
   // State for cascading dropdowns
   const [regions, setRegions] = useState([]);
   const [territories, setTerritories] = useState([]);
   const [patches, setPatches] = useState([]);
-  const [doctors, setDoctors] = useState([]);
+
+  const [availableBrands, setAvailableBrands] = useState([]); // New state for brands based on division
+  const [localStorageDivision, setLocalStorageDivision] = useState(null); // State to store division from local storage
 
   const [doctorHistory, setDoctorHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -38,9 +34,11 @@ const RequestForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showBrandDropdown, setShowBrandDropdown] = useState(false); 
+  const [showBrandError, setShowBrandError] = useState(false); // New state for brand error
 
   const [formData, setFormData] = useState({
     doctor_id: '',
+
     region: '',
     territory: '',
     patch: '',
@@ -58,13 +56,38 @@ const RequestForm = () => {
     requested_by_role: '',
   });
 
-  // Get BL territory from user (for BL role filtering)
   const getBLTerritory = () => {
-    // For BL users, we need to get their territory from user data
-    // This could come from user.bl_territory or similar field
-    // For now, we'll pass null to get all regions (backend will handle)
     return user?.bl_territory || null;
   };
+
+
+
+  // FETCH BRANDS on mount
+  useEffect(() => {
+    const storedDivision = localStorage.getItem('userDivision');
+    if (storedDivision) {
+      setLocalStorageDivision(storedDivision);
+    }
+
+    const fetchBrands = async () => {
+      console.log('Attempting to fetch all brands.');
+      setShowBrandError(false); // Reset error state
+      try {
+        // Use localStorageDivision for fetching brands if available, otherwise fallback to user?.division
+        const divisionToFetch = storedDivision || user?.division;
+        const res = await brandService.getBrands(divisionToFetch);
+        console.log('Fetched all brands for division:', divisionToFetch, res.data);
+        setAvailableBrands(res.data);
+        // Reset selected brands if the available brands change
+        setFormData(prev => ({ ...prev, selectedBrands: [] }));
+      } catch (err) {
+        console.error('Error fetching brands:', err);
+        setError('Failed to load brands: ' + (err.response?.data?.detail || err.message));
+        setShowBrandError(true); // Set error state on failure
+      }
+    };
+    fetchBrands();
+  }, [user?.division]); // Added user?.division to dependency array so brands re-fetch if user changes
 
   // FETCH REGIONS on mount (filtered by BL location if BL user)
   useEffect(() => {
@@ -74,10 +97,19 @@ const RequestForm = () => {
   const fetchRegions = async () => {
     try {
       console.log('Fetching regions for BL:', user?.username, 'role:', user?.role);
-      const blTerritory = user?.role === 'BL' ? getBLTerritory() : null;
-      const res = await doctorService.getRegionsByBL(blTerritory);
+      const currentUserId = user?.employee_id || null;
+      const currentUserRole = user?.role || null;
+      const res = await doctorService.getRegionsByBL(currentUserId, currentUserRole);
       console.log('Fetched regions:', res.data);
-      setRegions(res.data || []);
+      const regionsList = res.data || [];
+      setRegions(regionsList);
+      
+      // Auto-select region for BL users
+      if (user?.role === 'BL' && user?.bl_region) {
+        setFormData(prev => ({ ...prev, region: user.bl_region }));
+      } else if (regionsList.length === 1) {
+        setFormData(prev => ({ ...prev, region: regionsList[0] }));
+      }
     } catch (err) {
       console.error('Error fetching regions:', err);
       setError('Failed to load regions: ' + (err.response?.data?.detail || err.message));
@@ -91,7 +123,7 @@ const RequestForm = () => {
     } else {
       setTerritories([]);
       setPatches([]);
-      setDoctors([]);
+
     }
   }, [formData.region]);
 
@@ -101,7 +133,12 @@ const RequestForm = () => {
       const blTerritory = user?.role === 'BL' ? getBLTerritory() : null;
       const res = await doctorService.getTerritoriesByRegion(region, blTerritory);
       console.log('Fetched territories:', res.data);
-      setTerritories(res.data || []);
+      const territoriesList = res.data || [];
+      setTerritories(territoriesList);
+      
+      if (territoriesList.length === 1) {
+        setFormData(prev => ({ ...prev, territory: territoriesList[0] }));
+      }
     } catch (err) {
       console.error('Error fetching territories:', err);
       setError('Failed to load territories: ' + (err.response?.data?.detail || err.message));
@@ -114,7 +151,7 @@ const RequestForm = () => {
       fetchPatches(formData.territory);
     } else {
       setPatches([]);
-      setDoctors([]);
+
     }
   }, [formData.territory]);
 
@@ -124,43 +161,19 @@ const RequestForm = () => {
       const blTerritory = user?.role === 'BL' ? getBLTerritory() : null;
       const res = await doctorService.getPatchesByTerritory(territory, formData.region, blTerritory);
       console.log('Fetched patches:', res.data);
-      setPatches(res.data || []);
+      const patchesList = res.data || [];
+      setPatches(patchesList);
+      
+      if (patchesList.length === 1) {
+        setFormData(prev => ({ ...prev, patch: patchesList[0] }));
+      }
     } catch (err) {
       console.error('Error fetching patches:', err);
       setError('Failed to load patches: ' + (err.response?.data?.detail || err.message));
     }
   };
 
-  // FETCH DOCTORS when patch changes
-  useEffect(() => {
-    if (formData.patch) {
-      fetchDoctors();
-    } else {
-      setDoctors([]);
-    }
-  }, [formData.patch]);
 
-  const fetchDoctors = async () => {
-    try {
-      console.log('Fetching doctors for:', {
-        region: formData.region,
-        territory: formData.territory,
-        patch: formData.patch
-      });
-      const blTerritory = user?.role === 'BL' ? getBLTerritory() : null;
-      const res = await doctorService.getDoctorsByLocation(
-        formData.region,
-        formData.territory,
-        formData.patch,
-        blTerritory
-      );
-      console.log('Fetched doctors:', res.data);
-      setDoctors(res.data || []);
-    } catch (err) {
-      console.error('Error fetching doctors:', err);
-      setError('Failed to load doctors: ' + (err.response?.data?.detail || err.message));
-    }
-  };
 
   // Close brand dropdown on outside click
   useEffect(() => {
@@ -175,6 +188,20 @@ const RequestForm = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [brandDropdownRef]);
+
+  // Close doctor suggestions dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (doctorInputRef.current && !doctorInputRef.current.contains(event.target)) {
+        setShowDoctorSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [doctorInputRef]);
 
   // HANDLE CHANGE for form fields
   const handleChange = (e) => {
@@ -193,7 +220,6 @@ const RequestForm = () => {
       }));
       setTerritories([]);
       setPatches([]);
-      setDoctors([]);
     } else if (name === 'territory') {
       // Reset dependent fields when territory changes
       setFormData(prev => ({
@@ -204,7 +230,6 @@ const RequestForm = () => {
         therapy_area: ''
       }));
       setPatches([]);
-      setDoctors([]);
     } else if (name === 'patch') {
       // Reset doctor when patch changes
       setFormData(prev => ({
@@ -213,19 +238,19 @@ const RequestForm = () => {
         doctor_id: '',
         therapy_area: ''
       }));
-      setDoctors([]);
-    } else if (name === 'brand_checkbox_custom') { // Handle custom brand checkboxes
+    } else if (name === 'brand_checkbox_custom') {
       setFormData(prev => {
         const currentBrands = new Set(prev.selectedBrands);
+        const brandName = value; // Use the brand name directly
         if (checked) {
           if (currentBrands.size < 2) {
-            currentBrands.add(value);
+            currentBrands.add(brandName);
           } else {
             alert('You can select a maximum of 2 brands.');
             return prev; 
           }
         } else {
-          currentBrands.delete(value);
+          currentBrands.delete(brandName);
         }
         const newSelectedBrands = Array.from(currentBrands);
         
@@ -285,32 +310,206 @@ const RequestForm = () => {
     }
   };
 
-  // DOCTOR SELECT
-  const handleDoctorChange = (e) => {
-    const doctorId = e.target.value;
-    const selectedDoctor = doctors.find(d => d.id === parseInt(doctorId));
+  // HANDLE DOCTOR SEARCH INPUT
+  const handleDoctorSearchChange = (e) => {
+    const term = e.target.value;
+    setDoctorSearchTerm(term);
+    
+    // For BL users: show suggestions from minimum 2 characters when no patch is pre-selected
+    const isBL = user?.role === 'BL';
+    if (isBL && !formData.patch && term.length >= 2) {
+      fetchDoctors(term);
+    } else if (!isBL || formData.patch) {
+      // Non-BL or BL with patch already selected: normal behavior
+      fetchDoctors(term);
+    } else if (term.length === 0) {
+      setSuggestedDoctors([]);
+      setShowDoctorSuggestions(false);
+    }
 
-    console.log('Selected doctor:', selectedDoctor);
-
+    // Clear selected doctor and (for BL) clear auto-filled territory/patch when typing new name
     setFormData(prev => ({
       ...prev,
-      doctor_id: doctorId,
-      therapy_area: selectedDoctor?.therapy_area || selectedDoctor?.speciality || ''
+      doctor_id: '',
+      // Reset auto-filled fields for BL when they start a new search
+      ...(isBL && selectedDoctorName && term !== selectedDoctorName
+        ? { territory: '', patch: '' }
+        : {}),
     }));
+    setSelectedDoctorName('');
+    setDoctorHistory([]);
   };
+
+  // Fetch doctors — for BL users, search by name only (no patch required); auto-populates location on select
+  const fetchDoctors = async (term) => {
+    try {
+      const isBL = user?.role === 'BL';
+      const blTerritory = isBL ? getBLTerritory() : null;
+
+      // For BL users: search by name even without patch; require at least 1 char unless showing patch-based list
+      if (!isBL && !formData.patch) {
+        console.log('fetchDoctors: No patch selected (non-BL), returning.');
+        setSuggestedDoctors([]);
+        return;
+      }
+
+      // BL with no search term and no patch — don't flood with all doctors, wait for typing
+      if (isBL && term.length === 0 && !formData.patch) {
+        setSuggestedDoctors([]);
+        setShowDoctorSuggestions(false);
+        return;
+      }
+
+      console.log('fetchDoctors: term:', term, ' patch:', formData.patch, ' isBL:', isBL);
+
+      let res;
+      if (term.length === 0) {
+        // Non-BL or BL with patch: fetch by location
+        res = await doctorService.getDoctorsByLocation(
+          formData.region,
+          formData.territory,
+          formData.patch,
+          blTerritory
+        );
+      } else if (isBL && !formData.patch) {
+        // BL typing name, no patch selected yet — search across BL's entire territory
+        res = await doctorService.searchDoctors(
+          term,
+          formData.region || null,
+          null,
+          null,
+          blTerritory
+        );
+      } else {
+        // Standard search with location filters
+        res = await doctorService.searchDoctors(
+          term,
+          formData.region,
+          formData.territory,
+          formData.patch,
+          blTerritory
+        );
+      }
+      console.log('fetchDoctors: API response:', res);
+      setSuggestedDoctors(res.data || []);
+      setShowDoctorSuggestions(true);
+    } catch (err) {
+      console.error('Error fetching doctors in fetchDoctors:', err.response?.data || err.message);
+      setError('Failed to load doctors: ' + (err.response?.data?.detail || err.message));
+      setSuggestedDoctors([]);
+    }
+  };
+
+  // HANDLE DOCTOR SELECTION FROM SUGGESTIONS
+  const handleDoctorSelect = (doctor) => {
+    setShowBrandError(false);
+    setError('');
+
+    const isBL = user?.role === 'BL';
+
+    setFormData(prev => {
+      const updatedForm = {
+        ...prev,
+        doctor_id: doctor.id,
+        therapy_area: doctor.therapy_area || doctor.speciality || '',
+        selectedBrands: [],
+      };
+
+      // For BL users: auto-populate region, territory, patch from doctor's record
+      if (isBL) {
+        if (doctor.region) updatedForm.region = doctor.region;
+        if (doctor.territory) updatedForm.territory = doctor.territory;
+        if (doctor.patch) updatedForm.patch = doctor.patch;
+      }
+
+      return updatedForm;
+    });
+
+    // Trigger territory/patch cascading fetches if they were auto-filled
+    if (isBL && doctor.region && doctor.territory) {
+      fetchTerritories(doctor.region);
+      if (doctor.territory) {
+        fetchPatches(doctor.territory);
+      }
+    }
+
+    setSelectedDoctorName(doctor.name);
+    setDoctorSearchTerm(doctor.name);
+    setShowDoctorSuggestions(false);
+    setSuggestedDoctors([]);
+  };
+
+  // Handle clearing selected doctor
+  const handleClearDoctor = () => {
+    setFormData(prev => ({
+      ...prev,
+      doctor_id: '',
+      therapy_area: '',
+      selectedBrands: [], // Clear selected brands
+    }));
+    setSelectedDoctorName('');
+    setDoctorSearchTerm('');
+    setDoctorHistory([]);
+    setAvailableBrands([]); // Clear available brands
+    setShowBrandError(false); // Clear brand error
+  };
+
+  // This useEffect handles pre-filling the form if a selectedDoctorId is passed via location state
+  useEffect(() => {
+    if (selectedDoctorId) {
+      const fetchSelectedDoctor = async () => {
+        try {
+          const res = await doctorService.getDoctorById(selectedDoctorId); // Assuming an API to get doctor by ID
+          const doctor = res.data;
+          if (doctor) {
+            handleDoctorSelect(doctor);
+            // Also set patch, territory, region if doctor data contains it
+            setFormData(prev => ({
+              ...prev,
+              region: doctor.region || '',
+              territory: doctor.territory || '',
+              patch: doctor.patch || ''
+            }));
+          }
+        } catch (err) {
+          console.error('Error fetching selected doctor:', err);
+          setError('Failed to load selected doctor: ' + (err.response?.data?.detail || err.message));
+        }
+      };
+      fetchSelectedDoctor();
+    }
+  }, [selectedDoctorId]);
+  
+  // This useEffect clears doctor-related states if the patch selection is cleared.
+  // For BL users: patch is optional, so we only clear doctor if a non-BL user has no patch.
+  useEffect(() => {
+    console.log('Patch useEffect triggered. formData.patch:', formData.patch);
+    const isBL = user?.role === 'BL';
+    if (!formData.patch && !isBL) {
+      // Only clear doctor selection for non-BL users when patch is cleared
+      setSuggestedDoctors([]);
+      setSelectedDoctorName('');
+      setDoctorSearchTerm('');
+      setFormData(prev => ({ ...prev, doctor_id: '', therapy_area: '' }));
+      setShowDoctorSuggestions(false);
+    } else if (formData.patch) {
+      console.log('Patch selected:', formData.patch, ' - calling fetchDoctors (no debounce)');
+      fetchDoctors('');
+      setShowDoctorSuggestions(true);
+    }
+  }, [formData.patch]);
 
   // FETCH HISTORY
   const fetchDoctorHistory = async () => {
     try {
-      const selectedDoctor = doctors.find(
-        d => d.id === parseInt(formData.doctor_id)
-      );
-
-      if (selectedDoctor) {
-        const res = await interactionService.getDoctorHistory(selectedDoctor.name);
-        setDoctorHistory(res.data);
-        setShowHistory(true);
+      if (!formData.doctor_id || !selectedDoctorName) {
+        setDoctorHistory([]);
+        setShowHistory(false);
+        return;
       }
+      const res = await interactionService.getDoctorHistory(selectedDoctorName);
+      setDoctorHistory(res.data);
+      setShowHistory(true);
     } catch (err) {
       console.error('Error fetching doctor history:', err);
     }
@@ -332,22 +531,27 @@ const RequestForm = () => {
       return;
     }
 
+
+
     if (!formData.region) {
       setError('Please select a region');
       setLoading(false);
       return;
     }
 
-    if (!formData.territory) {
-      setError('Please select a territory');
-      setLoading(false);
-      return;
-    }
+    // Territory and Patch are optional for BL users (SELECT selection)
+    if (user?.role !== 'BL') {
+      if (!formData.territory) {
+        setError('Please select a territory');
+        setLoading(false);
+        return;
+      }
 
-    if (!formData.patch) {
-      setError('Please select a patch');
-      setLoading(false);
-      return;
+      if (!formData.patch) {
+        setError('Please select a patch');
+        setLoading(false);
+        return;
+      }
     }
 
     if ((user?.role === 'BL' || user?.role === 'BM') && formData.selectedBrands.length === 0) {
@@ -439,67 +643,133 @@ const RequestForm = () => {
         <div className="form-section">
           <h3>Doctor Information</h3>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Region *</label>
-              <select 
-                className="form-control" 
-                name="region" 
-                value={formData.region} 
-                onChange={handleChange}
-              >
-                <option value="">Select Region</option>
-                {regions.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
+          {/* Division display for BL/BM users */}
 
-            <div className="form-group">
-              <label>Territory *</label>
-              <select 
-                className="form-control" 
-                name="territory" 
-                value={formData.territory} 
-                onChange={handleChange} 
-                disabled={!formData.region}
-              >
-                <option value="">Select Territory</option>
-                {territories.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+
+          <div className="form-group">
+            <label>Region *</label>
+            <select
+              className="form-control"
+              name="region"
+              value={formData.region}
+              onChange={handleChange}
+            >
+              <option value="">Select Region</option>
+              {regions.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label>Patch *</label>
-              <select 
-                className="form-control" 
-                name="patch" 
-                value={formData.patch} 
-                onChange={handleChange} 
-                disabled={!formData.territory}
+              <label>{user?.role === 'BL' ? 'Territory' : 'Territory *'}</label>
+              <select
+                className="form-control"
+                name="territory"
+                value={formData.territory}
+                onChange={handleChange}
+                disabled={!formData.region}
+                style={user?.role === 'BL' && formData.territory ? { backgroundColor: '#e8f5e9' } : {}}
               >
-                <option value="">Select Patch</option>
-                {patches.map(p => <option key={p} value={p}>{p}</option>)}
+                <option value="">{user?.role === 'BL' ? 'SELECT' : 'Select Territory'}</option>
+                {territories.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
+              {user?.role === 'BL' && formData.territory && (
+                <small style={{ color: '#2e7d32', fontSize: '0.75rem' }}></small>
+              )}
             </div>
 
             <div className="form-group">
-              <label>Doctor *</label>
-              <select 
-                className="form-control" 
-                name="doctor_id" 
-                value={formData.doctor_id} 
-                onChange={handleDoctorChange} 
-                disabled={!formData.patch}
+              <label>{user?.role === 'BL' ? 'Patch' : 'Patch *'}</label>
+              <select
+                className="form-control"
+                name="patch"
+                value={formData.patch}
+                onChange={handleChange}
+                disabled={!formData.territory}
+                style={user?.role === 'BL' && formData.patch ? { backgroundColor: '#e8f5e9' } : {}}
               >
-                <option value="">Select Doctor</option>
-                {doctors.map(d => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} ({d.speciality || d.therapy_area || ''})
-                  </option>
-                ))}
+                <option value="">{user?.role === 'BL' ? 'SELECT' : 'Select Patch'}</option>
+                {patches.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
+              {user?.role === 'BL' && formData.patch && (
+                <small style={{ color: '#2e7d32', fontSize: '0.75rem' }}></small>
+              )}
             </div>
+          </div>
+
+          <div className="form-group" style={{ position: 'relative' }} ref={doctorInputRef}>
+            <label>Doctor *</label>
+            {user?.role === 'BL' && !formData.patch && (
+              <small style={{ color: '#6c757d', display: 'block', marginBottom: '4px' }}>
+
+              </small>
+            )}
+            <input
+              type="text"
+              className="form-control"
+              name="doctor_search_term"
+              value={selectedDoctorName || doctorSearchTerm}
+              onChange={handleDoctorSearchChange}
+              placeholder={user?.role === 'BL' ? 'Search Doctor by name...' : 'Search Doctor'}
+              disabled={user?.role !== 'BL' && !formData.patch}
+              onFocus={() => {
+                setShowDoctorSuggestions(true);
+                if (!doctorSearchTerm && formData.patch) {
+                  fetchDoctors('');
+                }
+              }}
+            />
+            {formData.doctor_id && (
+              <button
+                type="button"
+                className="clear-doctor-btn"
+                onClick={handleClearDoctor}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '38px',
+                  background: 'none',
+                  border: 'none',
+                  color: '#dc3545',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                }}
+              >
+                &times;
+              </button>
+            )}
+            {showDoctorSuggestions && suggestedDoctors.length > 0 && (
+              <div className="doctor-suggestions-dropdown" style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                border: '1px solid #ced4da',
+                borderRadius: '0.25rem',
+                backgroundColor: '#fff',
+                zIndex: 1000,
+                maxHeight: '200px',
+                overflowY: 'auto',
+                boxShadow: '0 0.5rem 1rem rgba(0,0,0,.15)',
+              }}>
+                {suggestedDoctors.map(doctor => (
+                  <div
+                    key={doctor.id}
+                    className="doctor-suggestion-item"
+                    onClick={() => handleDoctorSelect(doctor)}
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #eee',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
+                  >
+                    {doctor.name} ({doctor.speciality || doctor.therapy_area || ''})
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="form-group">
@@ -507,87 +777,95 @@ const RequestForm = () => {
             <input className="form-control" value={formData.therapy_area} readOnly />
           </div>
 
-          {(user?.role === 'BL' || user?.role === 'BM') && (
+          {(user?.role === 'BL' || user?.role === 'BM') && formData.doctor_id && (
             <div className="form-group" style={{ position: 'relative' }} ref={brandDropdownRef}>
               <label>Select Brands (up to 2) *</label>
-              <div
-                className="custom-multi-select-display"
-                onClick={() => setShowBrandDropdown(!showBrandDropdown)}
-                style={{
-                  border: '1px solid #ced4da',
-                  borderRadius: '0.25rem',
-                  padding: '0.375rem 0.75rem',
-                  minHeight: '38px',
-                  cursor: 'pointer',
-                  backgroundColor: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '5px',
-                }}
-              >
-                {formData.selectedBrands.length > 0 ? (
-                  formData.selectedBrands.map(brand => (
-                    <span key={brand} className="selected-brand-tag" style={{
-                      backgroundColor: '#e9ecef',
-                      padding: '2px 8px',
-                      borderRadius: '15px',
-                      fontSize: '0.8rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px'
-                    }}>
-                      {brand}
-                      <span onClick={(e) => {
-                        e.stopPropagation(); // Prevent dropdown from closing
-                        handleChange({
-                          target: { name: 'brand_checkbox_custom', value: brand, type: 'checkbox', checked: false }
-                        });
-                      }} style={{ cursor: 'pointer', fontWeight: 'bold' }}>&times;</span>
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ color: '#6c757d' }}>Select Brands...</span>
-                )}
-              </div>
-              
-              {showBrandDropdown && (
-                <div className="brand-options-dropdown" style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  border: '1px solid #ced4da',
-                  borderRadius: '0.25rem',
-                  backgroundColor: '#fff',
-                  zIndex: 1000,
-                  maxHeight: '200px',
-                  overflowY: 'auto',
-                  boxShadow: '0 0.5rem 1rem rgba(0,0,0,.15)'
-                }}>
-                  {BRAND_OPTIONS.map(brand => (
-                    <label key={brand} className="checkbox-label" style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '8px 12px',
+
+              {availableBrands.length === 0 && showBrandError ? (
+                <div className="error-message">{ (user?.role === 'BL' || user?.role === 'BM') ? 'No brands available for your division.' : 'No brands available for the selected doctor\'s division.' }</div>
+              ) : (
+                <>
+                  <div
+                    className="custom-multi-select-display"
+                    onClick={() => setShowBrandDropdown(!showBrandDropdown)}
+                    style={{
+                      border: '1px solid #ced4da',
+                      borderRadius: '0.25rem',
+                      padding: '0.375rem 0.75rem',
+                      minHeight: '38px',
                       cursor: 'pointer',
-                      borderBottom: '1px solid #eee'
-                    }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}>
-                      <input
-                        type="checkbox"
-                        name="brand_checkbox_custom"
-                        value={brand}
-                        checked={formData.selectedBrands.includes(brand)}
-                        onChange={handleChange}
-                        disabled={!formData.selectedBrands.includes(brand) && formData.selectedBrands.length >= 2}
-                        style={{ marginRight: '10px' }}
-                      />
-                      {brand}
-                    </label>
-                  ))}
-                </div>
+                      backgroundColor: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '5px',
+                    }}
+                  >
+                    {formData.selectedBrands.length > 0 ? (
+                      formData.selectedBrands.map(brandName => (
+                        <span key={brandName} className="selected-brand-tag" style={{
+                          backgroundColor: '#e9ecef',
+                          padding: '2px 8px',
+                          borderRadius: '15px',
+                          fontSize: '0.8rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px'
+                        }}>
+                          {brandName}
+                          <span onClick={(e) => {
+                            e.stopPropagation(); // Prevent dropdown from closing
+                            handleChange({
+                              target: { name: 'brand_checkbox_custom', value: brandName, type: 'checkbox', checked: false }
+                            });
+                          }} style={{ cursor: 'pointer', fontWeight: 'bold' }}>&times;</span>
+                        </span>
+                      ))
+                    ) : (
+                      <span style={{ color: '#6c757d' }}>Select Brands...</span>
+                    )}
+                  </div>
+                  
+                  {showBrandDropdown && (
+                    <div className="brand-options-dropdown" style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      border: '1px solid #ced4da',
+                      borderRadius: '0.25rem',
+                      backgroundColor: '#fff',
+                      zIndex: 1000,
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      boxShadow: '0 0.5rem 1rem rgba(0,0,0,.15)'
+                    }}>
+                      {availableBrands.map(brand => (
+                        <label key={brand.id} className="checkbox-label" style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee'
+                        }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}>
+                          <input
+                            type="checkbox"
+                            name="brand_checkbox_custom"
+                            value={brand.brandname} // Use brand.brandname as value
+                            checked={formData.selectedBrands.includes(brand.brandname)}
+                            onChange={handleChange}
+                            disabled={!formData.selectedBrands.includes(brand.name) && formData.selectedBrands.length >= 2}
+                            style={{ marginRight: '10px' }}
+                          />
+                          {brand.brandname}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
+              {/* The general error message will be shown at the top of the form, so no need for a specific one here */}
             </div>
           )}
         </div>
@@ -622,13 +900,6 @@ const RequestForm = () => {
                     onChange={handleChange}
                   />
                 </div>
-
-                {/* <div className="form-group">
-                  <label>Priority</label>
-                  <select className="form-control" name="priority1" value={formData.priority1} onChange={handleChange}>
-                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div> */}
 
                 <div className="form-group">
                   <label>Problem Statement * </label>
@@ -669,13 +940,6 @@ const RequestForm = () => {
                     onChange={handleChange}
                   />
                 </div>
-
-                {/* <div className="form-group">
-                  <label>Priority</label>
-                  <select className="form-control" name="priority2" value={formData.priority2} onChange={handleChange}>
-                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div> */}
 
                 <div className="form-group">
                   <label>Problem Statement * </label>
