@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { ROLE_PERMISSIONS } from '../utils/permissionConfig';
 
 const AuthContext = createContext(null);
 
@@ -8,28 +9,34 @@ export const AuthProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const login = (userData) => {
+  const login = useCallback((userData) => {
     setUser(userData);
     localStorage.setItem('msl_user', JSON.stringify(userData));
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem('msl_user');
-  };
+  }, []);
 
-  const hasAccess = (allowedRoles) => {
-    if (!user) return false;
-    return allowedRoles.includes(user.role);
-  };
+  const hasPermission = useCallback((permission) => {
+    if (!user || !user.role) return false;
+    const permissions = ROLE_PERMISSIONS[user.role] || [];
+    return permissions.includes(permission);
+  }, [user]);
 
-  const value = {
+  const canCreateRequest = useCallback(() => {
+    return hasPermission('CREATE_REQUEST');
+  }, [hasPermission]);
+
+  const value = useMemo(() => ({
     user,
     login,
     logout,
-    hasAccess,
+    hasPermission,
+    canCreateRequest,
     isAuthenticated: !!user,
-  };
+  }), [user, login, logout, hasPermission, canCreateRequest]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

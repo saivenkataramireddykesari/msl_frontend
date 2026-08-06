@@ -102,14 +102,26 @@ const RequestForm = () => {
       const res = await doctorService.getRegionsByBL(currentUserId, currentUserRole);
       console.log('Fetched regions:', res.data);
       const regionsList = res.data || [];
-      setRegions(regionsList);
       
-      // Auto-select region for BL users
-      if (user?.role === 'BL' && user?.bl_region) {
-        setFormData(prev => ({ ...prev, region: user.bl_region }));
-      } else if (regionsList.length === 1) {
-        setFormData(prev => ({ ...prev, region: regionsList[0] }));
+      let filteredRegions = [];
+      if ((user?.role === 'BL' || user?.role === 'BM')) {
+        // If BL or BM user, restrict to their assigned bl_region if available
+        if (user?.bl_region) {
+          filteredRegions = [user.bl_region];
+          setFormData(prev => ({ ...prev, region: user.bl_region }));
+        } else {
+          // If BL/BM user but no bl_region, show no regions to prevent showing all
+          filteredRegions = [];
+          setError('Your account is not assigned to a specific region. Please contact support.');
+        }
+      } else {
+        // For other roles, show all fetched regions
+        filteredRegions = regionsList;
+        if (regionsList.length === 1) {
+          setFormData(prev => ({ ...prev, region: regionsList[0] }));
+        }
       }
+      setRegions(filteredRegions);
     } catch (err) {
       console.error('Error fetching regions:', err);
       setError('Failed to load regions: ' + (err.response?.data?.detail || err.message));
@@ -130,8 +142,9 @@ const RequestForm = () => {
   const fetchTerritories = async (region) => {
     try {
       console.log('Fetching territories for region:', region);
-      const blTerritory = user?.role === 'BL' ? getBLTerritory() : null;
-      const res = await doctorService.getTerritoriesByRegion(region, blTerritory);
+      const currentUserId = user?.employee_id || null;
+      const currentUserRole = user?.role || null;
+      const res = await doctorService.getTerritoriesByRegion(region, currentUserId, currentUserRole);
       console.log('Fetched territories:', res.data);
       const territoriesList = res.data || [];
       setTerritories(territoriesList);
@@ -158,8 +171,9 @@ const RequestForm = () => {
   const fetchPatches = async (territory) => {
     try {
       console.log('Fetching patches for territory:', territory);
-      const blTerritory = user?.role === 'BL' ? getBLTerritory() : null;
-      const res = await doctorService.getPatchesByTerritory(territory, formData.region, blTerritory);
+      const currentUserId = user?.employee_id || null;
+      const currentUserRole = user?.role || null;
+      const res = await doctorService.getPatchesByTerritory(territory, formData.region, currentUserId, currentUserRole);
       console.log('Fetched patches:', res.data);
       const patchesList = res.data || [];
       setPatches(patchesList);

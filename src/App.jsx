@@ -33,11 +33,11 @@ function App() {
             <Route path="requests" element={<RequestList />} />
             {/* Dashboard removed - role-based landing: BM → Monthly Report, Others → Requests */}
             {/* <Route path="dashboard" element={<Navigate to="/requests" replace />} /> */}
-            <Route path="requests/new" element={<RequestForm />} />
+            <Route path="requests/new" element={<ProtectedRoute permission="CREATE_REQUEST"><RequestForm /></ProtectedRoute>} />
             <Route path="requests/:id" element={<RequestDetail />} />
             <Route path="doctors" element={<DoctorManagement />} />
             <Route path="office-activities" element={<OfficeActivities />} />
-            <Route path="monthly-report" element={<MonthlyReport />} />
+            <Route path="monthly-report" element={<ProtectedRoute permission="VIEW_MONTHLY_REPORT"><MonthlyReport /></ProtectedRoute>} />
           </Route>
 
           {/* Catch all */}

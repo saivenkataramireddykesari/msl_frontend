@@ -12,76 +12,74 @@ const Login = () => {
   const [searchParams] = useSearchParams();
   const dataParam = searchParams.get('data');
 
-  useEffect(() => {
-    const performUrlLogin = async () => {
-      // If there is no data param, check if the user is already authenticated
-      if (!dataParam) {
-        if (isAuthenticated && user) {
-          if (user.role === 'BM') {
-            navigate('/monthly-report', { replace: true });
-          } else {
-            navigate('/requests', { replace: true });
-          }
-        }
-        return;
-      }
+   useEffect(() => {
+     if (!dataParam && isAuthenticated && user) {
+       if (user.role === 'BM') {
+         navigate('/monthly-report', { replace: true });
+       } else {
+         navigate('/requests', { replace: true });
+       }
+     }
+   }, [dataParam, isAuthenticated, user, navigate]);
 
-      setError('');
-      setLoading(true);
+   useEffect(() => {
+     if (!dataParam || loading) {
+       return;
+     }
 
-      let employeeId = '';
-      try {
-        // Always decode from base64 - reject raw employee IDs
-        const decoded = atob(dataParam.trim()).trim();
-        // Validate that decoded value is a valid employee ID (alphanumeric pattern)
-        if (/^[a-zA-Z0-9]+$/.test(decoded)) {
-          employeeId = decoded;
-        } else {
-          throw new Error('Invalid employee ID format after decoding');
-        }
-      } catch (err) {
-        setError('Invalid login link: Employee ID must be base64 encoded.');
-        setLoading(false);
-        return;
-      }
+     const performUrlLogin = async () => {
+       setError('');
+       setLoading(true);
 
-      if (!employeeId) {
-        setError('Invalid login link: Employee ID is empty.');
-        setLoading(false);
-        return;
-      }
+       let employeeId = '';
+       try {
+         const decoded = atob(dataParam.trim()).trim();
+         if (/^[a-zA-Z0-9]+$/.test(decoded)) {
+           employeeId = decoded;
+         } else {
+           throw new Error('Invalid employee ID format after decoding');
+         }
+       } catch (err) {
+         setError('Invalid login link: Employee ID must be base64 encoded.');
+         setLoading(false);
+         return;
+       }
 
-      try {
-        console.log('Attempting passwordless login for Employee ID:', employeeId);
-        const response = await authService.loginByEmployeeId(employeeId);
-        const data = response.data;
+       if (!employeeId) {
+         setError('Invalid login link: Employee ID is empty.');
+         setLoading(false);
+         return;
+       }
 
-        login({
-          username: data.username,
-          role: data.role,
-          employee_id: data.employee_id,
-          bl_territory: data.bl_territory,
-          bl_region: data.bl_region,
-          division: data.division
-        });
+       try {
+         console.log('Attempting passwordless login for Employee ID:', employeeId);
+         const response = await authService.loginByEmployeeId(employeeId);
+         const data = response.data;
 
-        // Redirect based on role: BM goes to monthly-report, others go to requests
-        // Use replace: true so that search query parameter is replaced/removed from history
-        if (data.role === 'BM') {
-          navigate('/monthly-report', { replace: true });
-        } else {
-          navigate('/requests', { replace: true });
-        }
-      } catch (err) {
-        console.error('Passwordless login failed:', err);
-        setError(err.response?.data?.detail || 'Authentication failed. Please verify your employee ID link.');
-      } finally {
-        setLoading(false);
-      }
-    };
+         login({
+           username: data.username,
+           role: data.role,
+           employee_id: data.employee_id,
+           bl_territory: data.bl_territory,
+           bl_region: data.bl_region,
+           division: data.division
+         });
 
-    performUrlLogin();
-  }, [dataParam, login, navigate, isAuthenticated, user]);
+         if (data.role === 'BM') {
+           navigate('/monthly-report', { replace: true });
+         } else {
+           navigate('/requests', { replace: true });
+         }
+       } catch (err) {
+         console.error('Passwordless login failed:', err);
+         setError(err.response?.data?.detail || 'Authentication failed. Please verify your employee ID link.');
+       } finally {
+         setLoading(false);
+       }
+     };
+
+     performUrlLogin();
+   }, [dataParam, login, navigate, loading]);
 
   return (
     <div className="login-container">

@@ -68,19 +68,40 @@ const MonthlyReport = () => {
     }
   };
 
+  // Effect 1: Handles user authorization and redirection
+  // This useEffect is responsible only for checking user roles and redirecting
+  // if the user does not have the necessary permissions. It runs when 'user' or 'navigate' changes.
+  // Splitting this from data fetching prevents unnecessary re-renders or navigation loops
+  // that can occur if authorization and data fetching are intertwined.
   useEffect(() => {
-    // Check if user has access to this page
-    const allowedRoles = ['Asst General Manager', 'Associate Vice President'];
-    if (user && !allowedRoles.includes(user.role)) {
-      navigate('/dashboard');
+    const allowedRoles = ['Asst General Manager', 'Associate Vice President', 'BM'];
+    // Guard clause: If user object is not yet available, do nothing.
+    // This prevents trying to access user.role before the user context is loaded.
+    if (!user) {
       return;
     }
-    
-    // Auto-fetch report when component mounts if user is logged in
-    if (user) {
-      fetchReport();
+
+    // Check if the user's role is allowed. If not, redirect to dashboard.
+    // The 'replace: true' option prevents the user from navigating back to this unauthorized page.
+    if (!allowedRoles.includes(user.role)) {
+      navigate("/dashboard", { replace: true });
     }
-  }, [user, navigate, reportType, month, year, selectedDate]); // Add dependencies for re-fetching on filter change
+  }, [user, navigate]); // Dependencies: user (to react to login/logout) and navigate (stable reference)
+
+  // Effect 2: Handles fetching report data
+  // This useEffect is solely responsible for initiating the data fetch operation.
+  // It only runs if the user is authorized (checked by the guard clauses)
+  // and when relevant report parameters (user, reportType, month, year, selectedDate) change.
+  // This separation ensures that data fetching only occurs when it's safe and necessary,
+  // preventing "Maximum update depth exceeded" errors and unwanted API calls.
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    // Fetch the report data when the component mounts or when relevant dependencies change.
+    fetchReport();
+  }, [user, reportType, month, year, selectedDate]); // Dependencies for re-fetching on filter change
 
   const handleSubmit = (e) => {
     e.preventDefault();

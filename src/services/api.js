@@ -56,18 +56,20 @@ export const doctorService = {
     return api.get(`/doctors/regions?${params.toString()}`);
   },
   
-  getTerritoriesByRegion: (region, blTerritory = null) => {
+  getTerritoriesByRegion: (region, currentUserId = null, currentUserRole = null) => {
     const params = new URLSearchParams();
     params.append("region", region);
-    if (blTerritory) params.append("bl_territory", blTerritory);
+    if (currentUserId) params.append("current_user_employee_id", currentUserId);
+    if (currentUserRole) params.append("current_user_role", currentUserRole);
     return api.get(`/doctors/territories?${params.toString()}`);
   },
   
-  getPatchesByTerritory: (territory, region = null, blTerritory = null) => {
+  getPatchesByTerritory: (territory, region = null, currentUserId = null, currentUserRole = null) => {
     const params = new URLSearchParams();
     params.append("territory", territory);
     if (region) params.append("region", region);
-    if (blTerritory) params.append("bl_territory", blTerritory);
+    if (currentUserId) params.append("current_user_employee_id", currentUserId);
+    if (currentUserRole) params.append("current_user_role", currentUserRole);
     return api.get(`/doctors/patches?${params.toString()}`);
   },
   

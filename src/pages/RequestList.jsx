@@ -7,7 +7,7 @@ import '../styles/RequestList.css';
 const CLASSIFICATIONS = ['All', 'potential', 'non-potential', 'default'];
 
 const RequestList = () => {
-  const { user } = useAuth();
+  const { user, canCreateRequest } = useAuth();
   const [requests, setRequests] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -118,11 +118,11 @@ const RequestList = () => {
                     : 'Default'}
             </button>
           ))}
-          {(user?.role === 'BL' || user?.role === 'BM') && (
-          <Link to="/requests/new" className="new-request-btn">
-            + New Request
-          </Link>
-        )}
+          {canCreateRequest() && (
+            <Link to="/requests/new" className="new-request-btn">
+              + New Request
+            </Link>
+          )}
         </div>
       </div>
 
