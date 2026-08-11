@@ -16,7 +16,7 @@ export const authService = {
   login: (employeeId, password) =>
     api.post("/login", { employee_id: employeeId, password }),
   loginByEmployeeId: (employeeId) =>
-    api.post("/login-by-employee-id", { employee_id: employeeId }),
+    api.post("/api/login-by-employee-id", { employee_id: employeeId }),
 };
 
 
