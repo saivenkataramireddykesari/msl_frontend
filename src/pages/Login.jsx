@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/api';
@@ -22,12 +22,16 @@ const Login = () => {
      }
    }, [dataParam, isAuthenticated, user, navigate]);
 
+   const loginAttemptedRef = useRef(false);
+
    useEffect(() => {
-     if (!dataParam || loading) {
+     // If we have already attempted login for this URL param, don't do it again
+     if (!dataParam || loginAttemptedRef.current) {
        return;
      }
 
      const performUrlLogin = async () => {
+       loginAttemptedRef.current = true;
        setError('');
        setLoading(true);
 
@@ -79,14 +83,14 @@ const Login = () => {
      };
 
      performUrlLogin();
-   }, [dataParam, login, navigate, loading]);
+   }, [dataParam, login, navigate]);
 
   return (
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h1>MSL Engagement System</h1>
-          <p>Medical Science Liaison Management Platform</p>
+          <h1>Scientific Officer  Engagement System</h1>
+          <p>Scientific Officer Management Platform</p>
         </div>
 
         <div style={{ padding: '20px 0', textAlign: 'center' }}>

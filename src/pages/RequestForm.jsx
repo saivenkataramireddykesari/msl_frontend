@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { doctorService, requestService, interactionService, brandService } from '../services/api';
+import { doctorService, requestService, interactionService, brandService, hierarchyService } from '../services/api';
 import '../styles/RequestForm.css';
 
 const PRIORITIES = ['High', 'Medium', 'Low'];
@@ -24,6 +24,9 @@ const RequestForm = () => {
   const [regions, setRegions] = useState([]);
   const [territories, setTerritories] = useState([]);
   const [patches, setPatches] = useState([]);
+  
+  // NEW: State for cached access data
+  const [accessData, setAccessData] = useState({ regions: [], territories: [], patches: [], doctors: [] });
 
   const [availableBrands, setAvailableBrands] = useState([]); // New state for brands based on division
   const [localStorageDivision, setLocalStorageDivision] = useState(null); // State to store division from local storage
@@ -89,103 +92,220 @@ const RequestForm = () => {
     fetchBrands();
   }, [user?.division]); // Added user?.division to dependency array so brands re-fetch if user changes
 
-  // FETCH REGIONS on mount (filtered by BL location if BL user)
-  useEffect(() => {
-    fetchRegions();
-  }, []);
-
-  const fetchRegions = async () => {
+  // Define fetchAccessData outside useEffect to avoid re-creation issues
+  const fetchAccessData = useCallback(async () => {
     try {
-      console.log('Fetching regions for BL:', user?.username, 'role:', user?.role);
-      const currentUserId = user?.employee_id || null;
-      const currentUserRole = user?.role || null;
-      const res = await doctorService.getRegionsByBL(currentUserId, currentUserRole);
-      console.log('Fetched regions:', res.data);
-      const regionsList = res.data || [];
+      if (!user?.employee_id) return;
       
-      let filteredRegions = [];
-      if ((user?.role === 'BL' || user?.role === 'BM')) {
-        // If BL or BM user, restrict to their assigned bl_region if available
-        if (user?.bl_region) {
-          filteredRegions = [user.bl_region];
-          setFormData(prev => ({ ...prev, region: user.bl_region }));
-        } else {
-          // If BL/BM user but no bl_region, show no regions to prevent showing all
-          filteredRegions = [];
-          setError('Your account is not assigned to a specific region. Please contact support.');
+      // Check cache first
+      const cacheKey = `accessData_v3_${user.employee_id}`;
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setAccessData(parsed);
+        setRegions(parsed.regions || []);
+        if (parsed.regions?.length === 1) {
+           setFormData(prev => ({ ...prev, region: parsed.regions[0] }));
         }
-      } else {
-        // For other roles, show all fetched regions
-        filteredRegions = regionsList;
-        if (regionsList.length === 1) {
-          setFormData(prev => ({ ...prev, region: regionsList[0] }));
-        }
+        return;
       }
-      setRegions(filteredRegions);
-    } catch (err) {
-      console.error('Error fetching regions:', err);
-      setError('Failed to load regions: ' + (err.response?.data?.detail || err.message));
-    }
-  };
 
-  // FETCH TERRITORIES when region changes
+      const res = await hierarchyService.getAccessData(user.employee_id);
+      console.log("PATCH API RESPONSE:", res.data); // Added log
+      const data = res.data;
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify(data));
+      } catch (storageErr) {
+        console.warn("Could not cache accessData in sessionStorage, possibly due to quota limits", storageErr);
+      }
+      setAccessData(data);
+      
+      setRegions(data.regions || []);
+      if (data.regions?.length === 1) {
+         setFormData(prev => ({ ...prev, region: data.regions[0] }));
+      }
+    } catch (err) {
+      console.error("Error fetching access data:", err);
+      setError("Failed to load access data.");
+    }
+  }, [user?.employee_id]); // Added dependency for user.employee_id
+
+  // FETCH ACCESS DATA on mount
+  useEffect(() => {
+    if (user?.employee_id) {
+      console.log("User available, fetching access data...");
+      fetchAccessData();
+    }
+  }, [user?.employee_id, fetchAccessData]);
+
+  // FILTER TERRITORIES when region changes
   useEffect(() => {
     if (formData.region) {
-      fetchTerritories(formData.region);
+      // Filter territories that belong to the selected region
+      const filteredTerritories = accessData.territories.filter(
+        (territoryItem) => territoryItem.region === formData.region
+      );
+      const uniqueTerritories = [...new Set(filteredTerritories.map((t) => t.name))].sort();
+
+      setTerritories(uniqueTerritories);
+
+      // Auto select if only one
+      if (uniqueTerritories.length === 1) {
+        setFormData((prev) => ({ ...prev, territory: uniqueTerritories[0] }));
+      } else {
+        setFormData((prev) => ({ ...prev, territory: '' })); // Clear territory if region changes
+      }
     } else {
       setTerritories([]);
       setPatches([]);
-
     }
-  }, [formData.region]);
-
-  const fetchTerritories = async (region) => {
-    try {
-      console.log('Fetching territories for region:', region);
-      const currentUserId = user?.employee_id || null;
-      const currentUserRole = user?.role || null;
-      const res = await doctorService.getTerritoriesByRegion(region, currentUserId, currentUserRole);
-      console.log('Fetched territories:', res.data);
-      const territoriesList = res.data || [];
-      setTerritories(territoriesList);
-      
-      if (territoriesList.length === 1) {
-        setFormData(prev => ({ ...prev, territory: territoriesList[0] }));
-      }
-    } catch (err) {
-      console.error('Error fetching territories:', err);
-      setError('Failed to load territories: ' + (err.response?.data?.detail || err.message));
-    }
-  };
+  }, [formData.region, accessData.territories]);
 
   // FETCH PATCHES when territory changes
   useEffect(() => {
-    if (formData.territory) {
-      fetchPatches(formData.territory);
-    } else {
-      setPatches([]);
+    let cancelled = false;
 
-    }
-  }, [formData.territory]);
+    const fetchPatches = async () => {
 
-  const fetchPatches = async (territory) => {
-    try {
-      console.log('Fetching patches for territory:', territory);
-      const currentUserId = user?.employee_id || null;
-      const currentUserRole = user?.role || null;
-      const res = await doctorService.getPatchesByTerritory(territory, formData.region, currentUserId, currentUserRole);
-      console.log('Fetched patches:', res.data);
-      const patchesList = res.data || [];
-      setPatches(patchesList);
-      
-      if (patchesList.length === 1) {
-        setFormData(prev => ({ ...prev, patch: patchesList[0] }));
+      if (!formData.territory) {
+        console.log("PATCH: No territory selected");
+
+        setPatches([]);
+
+        setFormData(prev => ({
+          ...prev,
+          patch: ''
+        }));
+
+        return;
       }
-    } catch (err) {
-      console.error('Error fetching patches:', err);
-      setError('Failed to load patches: ' + (err.response?.data?.detail || err.message));
-    }
-  };
+
+      try {
+
+        console.log("========================================");
+        console.log("PATCH FETCH START");
+        console.log("Territory:", formData.territory);
+        console.log("Region:", formData.region);
+        console.log("Employee:", user?.employee_id);
+        console.log("Role:", user?.role);
+        console.log("========================================");
+
+        const response =
+          await doctorService.getPatchesByTerritory(
+            formData.territory,
+            formData.region || undefined,
+            user?.employee_id,
+            user?.role
+          );
+
+        console.log(
+          "PATCH API STATUS:",
+          response.status
+        );
+
+        console.log(
+          "PATCH API RAW RESPONSE:",
+          response.data
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        let fetchedPatches = response.data || [];
+
+        // Support both:
+        // ["PATCH1", "PATCH2"]
+        //
+        // and:
+        // [{ name: "PATCH1" }, { name: "PATCH2" }]
+
+        if (
+          fetchedPatches.length > 0 &&
+          typeof fetchedPatches[0] === 'object'
+        ) {
+          fetchedPatches = fetchedPatches
+            .map(p => p.patch || p.name)
+            .filter(Boolean);
+        }
+
+        const uniquePatches = [
+          ...new Set(
+            fetchedPatches
+              .map(p => String(p).trim())
+              .filter(Boolean)
+          )
+        ].sort();
+
+        console.log(
+          "PATCHES FOUND:",
+          uniquePatches
+        );
+
+        setPatches(uniquePatches);
+
+        if (uniquePatches.length === 1) {
+
+          console.log(
+            "AUTO SELECTING PATCH:",
+            uniquePatches[0]
+          );
+
+          setFormData(prev => ({
+            ...prev,
+            patch: uniquePatches[0]
+          }));
+
+        } else {
+
+          setFormData(prev => ({
+            ...prev,
+            patch: ''
+          }));
+        }
+
+      } catch (error) {
+
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "PATCH API ERROR:",
+          error
+        );
+
+        console.error(
+          "PATCH ERROR RESPONSE:",
+          error?.response?.data
+        );
+
+        console.error(
+          "PATCH ERROR STATUS:",
+          error?.response?.status
+        );
+
+        setPatches([]);
+
+        setFormData(prev => ({
+          ...prev,
+          patch: ''
+        }));
+      }
+    };
+
+    fetchPatches();
+
+    return () => {
+      cancelled = true;
+    };
+
+  }, [
+    formData.territory,
+    formData.region,
+    user?.employee_id,
+    user?.role
+  ]);
 
 
 
@@ -354,11 +474,10 @@ const RequestForm = () => {
     setDoctorHistory([]);
   };
 
-  // Fetch doctors — for BL users, search by name only (no patch required); auto-populates location on select
+  // Fetch doctors dynamically from API
   const fetchDoctors = async (term) => {
     try {
       const isBL = user?.role === 'BL';
-      const blTerritory = isBL ? getBLTerritory() : null;
 
       // For BL users: search by name even without patch; require at least 1 char unless showing patch-based list
       if (!isBL && !formData.patch) {
@@ -374,42 +493,31 @@ const RequestForm = () => {
         return;
       }
 
-      console.log('fetchDoctors: term:', term, ' patch:', formData.patch, ' isBL:', isBL);
+      console.log('fetchDoctors API: term:', term, ' patch:', formData.patch, ' isBL:', isBL);
 
-      let res;
-      if (term.length === 0) {
-        // Non-BL or BL with patch: fetch by location
-        res = await doctorService.getDoctorsByLocation(
-          formData.region,
-          formData.territory,
-          formData.patch,
-          blTerritory
-        );
-      } else if (isBL && !formData.patch) {
-        // BL typing name, no patch selected yet — search across BL's entire territory
-        res = await doctorService.searchDoctors(
-          term,
-          formData.region || null,
-          null,
-          null,
-          blTerritory
-        );
+      let fetchedDoctors = [];
+      if (!formData.patch && isBL && term.length > 0) {
+        // Global search for BL
+        const res = await doctorService.searchDoctors(term, formData.region, formData.territory, null, formData.territory);
+        fetchedDoctors = res.data || [];
       } else {
-        // Standard search with location filters
-        res = await doctorService.searchDoctors(
-          term,
-          formData.region,
-          formData.territory,
-          formData.patch,
-          blTerritory
-        );
+        // Location based search
+        const res = await doctorService.getDoctorsByLocation(formData.region, formData.territory, formData.patch, null);
+        fetchedDoctors = res.data || [];
+        
+        if (term) {
+          const lowerTerm = term.toLowerCase();
+          fetchedDoctors = fetchedDoctors.filter(d => 
+            (d.name && d.name.toLowerCase().includes(lowerTerm)) ||
+            (d.speciality && d.speciality.toLowerCase().includes(lowerTerm))
+          );
+        }
       }
-      console.log('fetchDoctors: API response:', res);
-      setSuggestedDoctors(res.data || []);
+
+      setSuggestedDoctors(fetchedDoctors);
       setShowDoctorSuggestions(true);
     } catch (err) {
-      console.error('Error fetching doctors in fetchDoctors:', err.response?.data || err.message);
-      setError('Failed to load doctors: ' + (err.response?.data?.detail || err.message));
+      console.error('Error fetching doctors API:', err);
       setSuggestedDoctors([]);
     }
   };
@@ -439,13 +547,8 @@ const RequestForm = () => {
       return updatedForm;
     });
 
-    // Trigger territory/patch cascading fetches if they were auto-filled
-    if (isBL && doctor.region && doctor.territory) {
-      fetchTerritories(doctor.region);
-      if (doctor.territory) {
-        fetchPatches(doctor.territory);
-      }
-    }
+    // The territory and patch will automatically update via the useEffects
+    // observing formData.region and formData.territory.
 
     setSelectedDoctorName(doctor.name);
     setDoctorSearchTerm(doctor.name);
@@ -473,7 +576,7 @@ const RequestForm = () => {
     if (selectedDoctorId) {
       const fetchSelectedDoctor = async () => {
         try {
-          const res = await doctorService.getDoctorById(selectedDoctorId); // Assuming an API to get doctor by ID
+          const res = await doctorService.getDoctor(selectedDoctorId); // Assuming an API to get doctor by ID
           const doctor = res.data;
           if (doctor) {
             handleDoctorSelect(doctor);
@@ -645,7 +748,7 @@ const RequestForm = () => {
   return (
     <div className="request-form-container">
       <div className="form-header">
-        <h1>MSL Engagement Request</h1>
+        <h1>Scientific Officer Engagement Request</h1>
         <p>Create request for doctor interaction</p>
       </div>
 
@@ -899,7 +1002,7 @@ const RequestForm = () => {
                     name="objective1"
                     value={formData.objective1}
                     onChange={handleChange} 
-                    placeholder={`Reason for requesting MSL interaction for ${formData.selectedBrands[0]}`}
+                    placeholder={`Reason for requesting Scientific Officer interaction for ${formData.selectedBrands[0]}`}
                     required
                   />
                 </div>
@@ -910,7 +1013,7 @@ const RequestForm = () => {
                     className="form-control"
                     name="expected_outcome1"
                     value={formData.expected_outcome1} 
-                    placeholder={`Expectation from MSL interaction for ${formData.selectedBrands[0]}`}
+                    placeholder={`Expectation from Scientific Officer interaction for ${formData.selectedBrands[0]}`}
                     onChange={handleChange}
                   />
                 </div>
@@ -939,7 +1042,7 @@ const RequestForm = () => {
                     name="objective2"
                     value={formData.objective2}
                     onChange={handleChange} 
-                    placeholder={`Reason for requesting MSL interaction for ${formData.selectedBrands[1]}`}
+                    placeholder={`Reason for requesting Scientific Officer interaction for ${formData.selectedBrands[1]}`}
                     required
                   />
                 </div>
@@ -950,7 +1053,7 @@ const RequestForm = () => {
                     className="form-control"
                     name="expected_outcome2"
                     value={formData.expected_outcome2} 
-                    placeholder={`Expectation from MSL interaction for ${formData.selectedBrands[1]}`}
+                    placeholder={`Expectation from Scientific Officer interaction for ${formData.selectedBrands[1]}`}
                     onChange={handleChange}
                   />
                 </div>

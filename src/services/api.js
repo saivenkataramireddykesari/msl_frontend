@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "https://msl-backend-y6m5.onrender.com/api";
+const API_URL = import.meta.env.VITE_API_URL || "https://msl-backend-y6m5.onrender.com";
 
 // https://msl-backend-y6m5.onrender.com
 
@@ -64,14 +64,21 @@ export const doctorService = {
     return api.get(`/doctors/territories?${params.toString()}`);
   },
   
-  getPatchesByTerritory: (territory, region = null, currentUserId = null, currentUserRole = null) => {
-    const params = new URLSearchParams();
-    params.append("territory", territory);
-    if (region) params.append("region", region);
-    if (currentUserId) params.append("current_user_employee_id", currentUserId);
-    if (currentUserRole) params.append("current_user_role", currentUserRole);
-    return api.get(`/doctors/patches?${params.toString()}`);
-  },
+  getPatchesByTerritory: (
+  territory,
+  region,
+  employeeId,
+  role
+) => {
+  return api.get('/doctors/patches', {
+    params: {
+      territory: territory,
+      region: region,
+      current_user_employee_id: employeeId,
+      current_user_role: role
+    }
+  });
+},
   
   getDoctorsByLocation: (region = null, territory = null, patch = null, blTerritory = null) => {
     const params = new URLSearchParams();
@@ -244,6 +251,15 @@ export const reportService = {
 export const userService = {
   getUsers: () => api.get("/users"),
   getMslUsers: () => api.get("/users/msls"),
+};
+
+// ================= HIERARCHY =================
+export const hierarchyService = {
+  getAccessData: (employeeId) => {
+    const params = new URLSearchParams();
+    params.append("current_user_employee_id", employeeId);
+    return api.get(`/new-request/access-data?${params.toString()}`);
+  }
 };
 
 export default api;

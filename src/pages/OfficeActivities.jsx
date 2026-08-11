@@ -8,6 +8,9 @@ const ACTIVITY_CATEGORIES = [
   'Content Development',
   'Training',
   'Strategy Meetings',
+  'CME',
+  'Scientific evaluation',
+  'Protocol drafting',
   'Advisory Board Preparation',
 ];
 
