@@ -11,8 +11,16 @@ import DoctorManagement from './pages/DoctorManagement';
 import OfficeActivities from './pages/OfficeActivities';
 import MonthlyReport from './pages/MonthlyReport';
 import './App.css';
+import MaintenancePage from './components/MaintenancePage';
+
+const MAINTENANCE_MODE = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
+
 
 function App() {
+  if (MAINTENANCE_MODE) {
+    return <MaintenancePage />;
+  }
+
   return (
     <AuthProvider>
       <Router>
