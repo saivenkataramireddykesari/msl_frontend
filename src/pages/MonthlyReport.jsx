@@ -84,24 +84,22 @@ const MonthlyReport = () => {
     // Check if the user's role is allowed. If not, redirect to dashboard.
     // The 'replace: true' option prevents the user from navigating back to this unauthorized page.
     if (!allowedRoles.includes(user.role)) {
-      navigate("/dashboard", { replace: true });
+      navigate("/requests", { replace: true });
     }
   }, [user, navigate]); // Dependencies: user (to react to login/logout) and navigate (stable reference)
 
-  // Effect 2: Handles fetching report data
-  // This useEffect is solely responsible for initiating the data fetch operation.
-  // It only runs if the user is authorized (checked by the guard clauses)
-  // and when relevant report parameters (user, reportType, month, year, selectedDate) change.
-  // This separation ensures that data fetching only occurs when it's safe and necessary,
-  // preventing "Maximum update depth exceeded" errors and unwanted API calls.
+  // Effect 2: Handles fetching report data when filters change if an employee ID is entered
   useEffect(() => {
     if (!user) {
       return;
     }
-
-    // Fetch the report data when the component mounts or when relevant dependencies change.
-    fetchReport();
-  }, [user, reportType, month, year, selectedDate]); // Dependencies for re-fetching on filter change
+    if (employeeIds.trim()) {
+      fetchReport();
+    } else {
+      setReport(null);
+      setSelectedEmployee(null);
+    }
+  }, [user, reportType, month, year, selectedDate]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -288,6 +286,66 @@ const MonthlyReport = () => {
                 <span className="detail-period">
                   {selectedEmployee.month_name} {selectedEmployee.year}
                 </span>
+              </div>
+
+              {/* Employee Information & Hierarchy */}
+              <div className="section employee-info-section">
+                <h3>Employee Details & Reportings</h3>
+                <div className="info-grid">
+                  <div className="info-item">
+                    <span className="info-label">Role:</span>
+                    <span className="info-value">{selectedEmployee.role || "N/A"}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">Territory:</span>
+                    <span className="info-value">{selectedEmployee.territory || "N/A"}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">Region:</span>
+                    <span className="info-value">{selectedEmployee.region || "N/A"}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">HQ:</span>
+                    <span className="info-value">{selectedEmployee.hq || "N/A"}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">Reporting Manager:</span>
+                    <span className="info-value">
+                      {selectedEmployee.reporting_manager || "N/A"}{" "}
+                      {selectedEmployee.reporting_manager_code ? `(${selectedEmployee.reporting_manager_code})` : ""}
+                    </span>
+                  </div>
+                </div>
+
+                {selectedEmployee.direct_reports && selectedEmployee.direct_reports.length > 0 && (
+                  <div className="direct-reports-wrapper" style={{ marginTop: '20px' }}>
+                    <h4 style={{ fontSize: '1.05rem', color: '#2c3e50', marginBottom: '10px' }}>Direct Reportings ({selectedEmployee.direct_reports.length})</h4>
+                    <div className="daily-summary-table-wrapper">
+                      <table className="daily-summary-table">
+                        <thead>
+                          <tr>
+                            <th>Emp ID</th>
+                            <th>Emp Name</th>
+                            <th>Role</th>
+                            <th>Territory</th>
+                            <th>Region</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedEmployee.direct_reports.map((rep, idx) => (
+                            <tr key={idx}>
+                              <td><strong>{rep.employee_id}</strong></td>
+                              <td>{rep.employee_name}</td>
+                              <td>{rep.role || "-"}</td>
+                              <td>{rep.territory || "-"}</td>
+                              <td>{rep.region || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Employee Summary Cards */}
@@ -706,7 +764,7 @@ const MonthlyReport = () => {
 
       {!report && !loading && !error && (
         <div className="initial-message">
-          <p>Select criteria and generate a report to see employee activity.</p>
+          <p>Please enter an Employee ID above and click "Generate Report" to view monthly report and reportings.</p>
         </div>
       )}
     </div>
