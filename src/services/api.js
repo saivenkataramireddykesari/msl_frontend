@@ -1,8 +1,8 @@
 import axios from "axios";
 
-const API_URL = (import.meta.env.VITE_API_URL || "https://msl-backend-1.onrender.com/api").replace(/\/+$/, "");
+const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/+$/, "");
 
-// 
+// https://msl-backend-1.onrender.com
 const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -36,7 +36,7 @@ export const doctorService = {
   createDoctor: (data) => api.post("/doctors", data),
   duplicateDoctor: (id) => api.post(`/doctors/${id}/duplicate`),
   deleteDoctor: (id) => api.delete(`/doctors/${id}`),
-  
+
   searchDoctors: (searchTerm, region = null, territory = null, patch = null, blTerritory = null) => {
     const params = new URLSearchParams();
     params.append("search", searchTerm);
@@ -46,7 +46,7 @@ export const doctorService = {
     if (blTerritory) params.append("bl_territory", blTerritory);
     return api.get(`/doctors/search?${params.toString()}`);
   },
-  
+
   // Cascading dropdown APIs for BL location-based filtering
   getRegionsByBL: (currentUserId = null, currentUserRole = null) => {
     const params = new URLSearchParams();
@@ -54,7 +54,7 @@ export const doctorService = {
     if (currentUserRole) params.append("current_user_role", currentUserRole);
     return api.get(`/doctors/regions?${params.toString()}`);
   },
-  
+
   getTerritoriesByRegion: (region, currentUserId = null, currentUserRole = null) => {
     const params = new URLSearchParams();
     params.append("region", region);
@@ -62,23 +62,23 @@ export const doctorService = {
     if (currentUserRole) params.append("current_user_role", currentUserRole);
     return api.get(`/doctors/territories?${params.toString()}`);
   },
-  
+
   getPatchesByTerritory: (
-  territory,
-  region,
-  employeeId,
-  role
-) => {
-  return api.get('/doctors/patches', {
-    params: {
-      territory: territory,
-      region: region,
-      current_user_employee_id: employeeId,
-      current_user_role: role
-    }
-  });
-},
-  
+    territory,
+    region,
+    employeeId,
+    role
+  ) => {
+    return api.get('/doctors/patches', {
+      params: {
+        territory: territory,
+        region: region,
+        current_user_employee_id: employeeId,
+        current_user_role: role
+      }
+    });
+  },
+
   getDoctorsByLocation: (region = null, territory = null, patch = null, blTerritory = null) => {
     const params = new URLSearchParams();
     if (region) params.append("region", region);
@@ -104,7 +104,7 @@ export const requestService = {
     const queryParams = new URLSearchParams();
     if (params.role) queryParams.append("role", params.role);
     if (params.username) queryParams.append("username", params.username);
-    
+
     return api.get(`/requests/${id}?${queryParams.toString()}`);
   },
   assignRequest: (id, data) => {

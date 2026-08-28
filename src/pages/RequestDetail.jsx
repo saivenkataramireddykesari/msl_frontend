@@ -361,6 +361,14 @@ const RequestDetail = () => {
 
   const handleInteractionSubmit = async (e) => {
     e.preventDefault();
+
+    const minDate = getThirtyDaysAgoString();
+    const maxDate = getTodayString();
+    if (interactionForm.visit_date < minDate || interactionForm.visit_date > maxDate) {
+      alert(`Visit date must be within the last 30 days (${minDate} to ${maxDate}). You cannot log visits for dates older than 30 days or in the future.`);
+      return;
+    }
+
     try {
       // Filter out empty brand entries
       const validBrands = interactionForm.brands.filter(b => b.brand_name.trim() !== '');
@@ -420,6 +428,23 @@ const RequestDetail = () => {
       console.error('Error creating interaction:', error);
       alert('Failed to log interaction. Please try again.');
     }
+  };
+
+  const getThirtyDaysAgoString = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const formatDate = (dateString) => {
@@ -1344,8 +1369,8 @@ const RequestDetail = () => {
                   <input
                     type="date"
                     value={interactionForm.visit_date}
-                    min={new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                    max={new Date().toISOString().split('T')[0]}
+                    min={getThirtyDaysAgoString()}
+                    max={getTodayString()}
                     onChange={e => setInteractionForm({ ...interactionForm, visit_date: e.target.value })}
                     className="form-control"
                     style={{ marginTop: '6px' }}

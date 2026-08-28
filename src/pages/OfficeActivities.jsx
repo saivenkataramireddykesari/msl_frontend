@@ -107,6 +107,13 @@ const OfficeActivities = () => {
   const handleActivitySubmit = async (e) => {
     e.preventDefault();
     
+    const minDate = getThirtyDaysAgoString();
+    const maxDate = getTodayString();
+    if (activityForm.activity_date < minDate || activityForm.activity_date > maxDate) {
+      alert(`Activity date must be within the last 30 days (${minDate} to ${maxDate}). You cannot log activity for dates older than 30 days or in the future.`);
+      return;
+    }
+
     const hours = parseFloat(activityForm.hours_worked) || 0;
     
     // Prepare data for submission
@@ -143,6 +150,23 @@ const OfficeActivities = () => {
   };
 
   /* -- Helpers -- */
+  const getThirtyDaysAgoString = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const formatDate = (ds) =>
     new Date(ds).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -395,8 +419,8 @@ const OfficeActivities = () => {
                   <input
                     type="date"
                     value={activityForm.activity_date}
-                    min={new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                    max={new Date().toISOString().split('T')[0]}
+                    min={getThirtyDaysAgoString()}
+                    max={getTodayString()}
                     onChange={e => setActivityForm({ ...activityForm, activity_date: e.target.value })}
                     className="form-control"
                     style={{ marginTop: '6px' }}
