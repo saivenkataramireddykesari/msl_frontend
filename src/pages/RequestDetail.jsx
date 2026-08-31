@@ -362,10 +362,10 @@ const RequestDetail = () => {
   const handleInteractionSubmit = async (e) => {
     e.preventDefault();
 
-    const minDate = getThirtyDaysAgoString();
+    const minDate = getNinetyDaysAgoString();
     const maxDate = getTodayString();
     if (interactionForm.visit_date < minDate || interactionForm.visit_date > maxDate) {
-      alert(`Visit date must be within the last 30 days (${minDate} to ${maxDate}). You cannot log visits for dates older than 30 days or in the future.`);
+      alert(`Visit date must be within the last 90 days (${minDate} to ${maxDate}). You cannot log visits for dates older than 90 days or in the future.`);
       return;
     }
 
@@ -430,9 +430,9 @@ const RequestDetail = () => {
     }
   };
 
-  const getThirtyDaysAgoString = () => {
+  const getNinetyDaysAgoString = () => {
     const d = new Date();
-    d.setDate(d.getDate() - 30);
+    d.setDate(d.getDate() - 90);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -1369,7 +1369,7 @@ const RequestDetail = () => {
                   <input
                     type="date"
                     value={interactionForm.visit_date}
-                    min={getThirtyDaysAgoString()}
+                    min={getNinetyDaysAgoString()}
                     max={getTodayString()}
                     onChange={e => setInteractionForm({ ...interactionForm, visit_date: e.target.value })}
                     className="form-control"

@@ -107,10 +107,10 @@ const OfficeActivities = () => {
   const handleActivitySubmit = async (e) => {
     e.preventDefault();
     
-    const minDate = getThirtyDaysAgoString();
+    const minDate = getNinetyDaysAgoString();
     const maxDate = getTodayString();
     if (activityForm.activity_date < minDate || activityForm.activity_date > maxDate) {
-      alert(`Activity date must be within the last 30 days (${minDate} to ${maxDate}). You cannot log activity for dates older than 30 days or in the future.`);
+      alert(`Activity date must be within the last 90 days (${minDate} to ${maxDate}). You cannot log activity for dates older than 90 days or in the future.`);
       return;
     }
 
@@ -150,9 +150,9 @@ const OfficeActivities = () => {
   };
 
   /* -- Helpers -- */
-  const getThirtyDaysAgoString = () => {
+  const getNinetyDaysAgoString = () => {
     const d = new Date();
-    d.setDate(d.getDate() - 30);
+    d.setDate(d.getDate() - 90);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -419,7 +419,7 @@ const OfficeActivities = () => {
                   <input
                     type="date"
                     value={activityForm.activity_date}
-                    min={getThirtyDaysAgoString()}
+                    min={getNinetyDaysAgoString()}
                     max={getTodayString()}
                     onChange={e => setActivityForm({ ...activityForm, activity_date: e.target.value })}
                     className="form-control"
