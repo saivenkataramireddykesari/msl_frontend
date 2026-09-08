@@ -207,6 +207,10 @@ export const interactionService = {
   // Get interactions by date and user
   getInteractionsByDateUser: (visitDate, loggedBy) =>
     api.get(`/doctor-interactions/by-date-user?visit_date=${encodeURIComponent(visitDate)}&logged_by=${encodeURIComponent(loggedBy)}`),
+
+  // Get interactions by user
+  getInteractionsByUser: (loggedBy) =>
+    api.get(`/doctor-interactions/by-user?logged_by=${encodeURIComponent(loggedBy)}`),
 };
 
 // ================= OFFICE ACTIVITY =================

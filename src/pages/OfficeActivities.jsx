@@ -3,6 +3,11 @@ import { useAuth } from '../context/AuthContext';
 import { activityService, interactionService } from '../services/api';
 import '../styles/OfficeActivities.css';
 
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+
 const ACTIVITY_CATEGORIES = [
   'Literature Review',
   'Content Development',
@@ -22,18 +27,23 @@ const MONTHS = [
 const OfficeActivities = () => {
   const { user } = useAuth();
 
-  const [activities, setActivities]           = useState([]);
-  const [mslUsers, setMslUsers]               = useState([]);
-  const [selectedUser, setSelectedUser]       = useState(null);
-  const [viewMode, setViewMode]               = useState('loading');
-  const [loading, setLoading]                 = useState(true);
-  const [selectedMonth, setSelectedMonth]     = useState('');   // '' = all months
-  const [reportMonth, setReportMonth]         = useState(null); // month whose modal is open
+  const [activities, setActivities] = useState([]);
+  const [mslUsers, setMslUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [viewMode, setViewMode] = useState('loading');
+  const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState('');   // '' = all months
+  const [reportMonth, setReportMonth] = useState(null); // month whose modal is open
   const [showReportModal, setShowReportModal] = useState(false);
   const [showActivityForm, setShowActivityForm] = useState(false);
 
+  // Download report state
+  const [showDownloadMenu, setShowDownloadMenu] = useState(null);
+  const [downloadingReport, setDownloadingReport] = useState(false);
+
+
   const [selectedDayActivity, setSelectedDayActivity] = useState(null);
-  const [dayInteractions, setDayInteractions]         = useState([]);
+  const [dayInteractions, setDayInteractions] = useState([]);
   const [loadingDayInteractions, setLoadingDayInteractions] = useState(false);
 
   const [activityForm, setActivityForm] = useState({
@@ -106,7 +116,7 @@ const OfficeActivities = () => {
   /* -- Log activity submit with data verification -- */
   const handleActivitySubmit = async (e) => {
     e.preventDefault();
-    
+
     const minDate = getNinetyDaysAgoString();
     const maxDate = getTodayString();
     if (activityForm.activity_date < minDate || activityForm.activity_date > maxDate) {
@@ -115,20 +125,20 @@ const OfficeActivities = () => {
     }
 
     const hours = parseFloat(activityForm.hours_worked) || 0;
-    
+
     // Prepare data for submission
     const submitData = {
       ...activityForm,
       hours_worked: hours,
       msl_username: user.username
     };
-    
+
     console.log('DEBUG - Submitting activity data:', submitData);
 
     try {
       const response = await activityService.createActivity(submitData);
       console.log('DEBUG - Activity saved successfully:', response.data);
-      
+
       // Reset form
       setShowActivityForm(false);
       setActivityForm({
@@ -138,7 +148,7 @@ const OfficeActivities = () => {
         linked_outputs: '',
         hours_worked: '',
       });
-      
+
       // Refresh data from server to verify persistence
       await fetchActivities(user.username);
       alert('Activity logged successfully!');
@@ -200,7 +210,7 @@ const OfficeActivities = () => {
       monthGroups[monthKey].activities.push(a);
       monthGroups[monthKey].totalHours += (a.hours_worked || 0);
       monthGroups[monthKey].totalDoctors += (a.doctors_visited || 0);
-      
+
       const wt = (a.work_type || '').toLowerCase();
       if (wt === 'worked at office' || wt === 'office') monthGroups[monthKey].officeCount++;
       else if (wt === 'call supported' || wt === 'field') monthGroups[monthKey].fieldCount++;
@@ -249,6 +259,610 @@ const OfficeActivities = () => {
     : [];
 
   const openModal = (month) => { setReportMonth(month); setShowReportModal(true); };
+
+  // ============================================================
+  // DOWNLOAD MONTHLY REPORT
+  // ============================================================
+
+  /**
+   * Convert "September 2026" into:
+   * {
+   *   monthName: "September",
+   *   year: 2026
+   * }
+   */
+  const parseReportMonth = (monthYear) => {
+    const parts = monthYear.split(' ');
+
+    return {
+      monthName: parts[0],
+      year: Number(parts[1])
+    };
+  };
+
+
+  /**
+   * Get all doctor interactions for all activity dates
+   * belonging to the selected month.
+   */
+  const fetchMonthlyDoctorInteractions = async (monthName, year, monthlyActivities) => {
+    try {
+      const response = await interactionService.getInteractionsByUser(selectedUser);
+      const allUserInteractions = Array.isArray(response.data) ? response.data : [];
+
+      const monthlyInteractions = allUserInteractions.filter(int => {
+        if (!int.visit_date) return false;
+        const d = new Date(int.visit_date);
+        return MONTHS[d.getMonth()] === monthName && d.getFullYear() === year;
+      });
+
+      return monthlyInteractions;
+    } catch (error) {
+      console.error("Failed to fetch doctor interactions by user:", error);
+      const interactions = [];
+      const uniqueDates = [
+        ...new Set(
+          monthlyActivities
+            .map(activity => activity.activity_date)
+            .filter(Boolean)
+        )
+      ];
+
+      await Promise.all(
+        uniqueDates.map(async (date) => {
+          try {
+            const username =
+              monthlyActivities.find(
+                activity => activity.activity_date === date
+              )?.msl_username || selectedUser;
+
+            const response =
+              await interactionService.getInteractionsByDateUser(
+                date,
+                username
+              );
+
+            const dateInteractions = Array.isArray(response.data)
+              ? response.data
+              : [];
+
+            dateInteractions.forEach(interaction => {
+              interactions.push({
+                ...interaction,
+                visit_date: date,
+                msl_username: username
+              });
+            });
+
+          } catch (e) {
+            console.error(`Failed to fetch doctor interactions for ${date}:`, e);
+          }
+        })
+      );
+
+      return interactions;
+    }
+  };
+
+
+  /**
+   * Prepare monthly report data.
+   */
+  const prepareMonthlyReport = async (monthYear) => {
+    const { monthName, year } = parseReportMonth(monthYear);
+
+    // Filter activities for selected month/year
+    const monthlyActivities = activities.filter(activity => {
+      const date = new Date(activity.activity_date);
+
+      return (
+        MONTHS[date.getMonth()] === monthName &&
+        date.getFullYear() === year
+      );
+    });
+
+    // Fetch doctor interactions for the selected month
+    const doctorInteractions =
+      await fetchMonthlyDoctorInteractions(monthName, year, monthlyActivities);
+
+    if (monthlyActivities.length === 0 && doctorInteractions.length === 0) {
+      throw new Error(`No activity or doctor visit data found for ${monthYear}.`);
+    }
+
+    // Calculate summary
+    const totalHours = monthlyActivities.reduce(
+      (total, activity) =>
+        total + (Number(activity.hours_worked) || 0),
+      0
+    );
+
+    const totalDoctors = doctorInteractions.length;
+
+    const officeDays = monthlyActivities.filter(
+      activity => isOffice(activity)
+    ).length;
+
+    const fieldDays = monthlyActivities.filter(
+      activity => isField(activity)
+    ).length;
+
+    const bothDays = monthlyActivities.filter(activity => {
+      const wt = (activity.work_type || '').toLowerCase();
+      return wt === 'both done';
+    }).length;
+
+    return {
+      monthYear,
+      monthName,
+      year,
+      monthlyActivities,
+      doctorInteractions,
+      summary: {
+        totalDays: monthlyActivities.length,
+        totalHours,
+        totalDoctors,
+        officeDays,
+        fieldDays,
+        bothDays
+      }
+    };
+  };
+
+
+  /**
+   * Download Excel report.
+   */
+  const downloadExcelReport = async (monthYear) => {
+    try {
+      setDownloadingReport(true);
+      setShowDownloadMenu(null);
+
+      const report = await prepareMonthlyReport(monthYear);
+
+      const {
+        monthlyActivities,
+        doctorInteractions,
+        summary
+      } = report;
+
+      const workbook = XLSX.utils.book_new();
+
+      // ========================================================
+      // SHEET 1 - MONTHLY SUMMARY
+      // ========================================================
+
+      const summaryData = [
+        ['MONTHLY ACTIVITY & DOCTOR VISIT REPORT'],
+        [],
+        ['MSL / User', selectedUser],
+        ['Report Month', monthYear],
+        [],
+        ['Metric', 'Value'],
+        ['Total Days Logged', summary.totalDays],
+        ['Total Hours Worked', summary.totalHours],
+        ['Total Doctors Visited', summary.totalDoctors],
+        ['Office Days', summary.officeDays],
+        ['Field Days', summary.fieldDays],
+        ['Both Done Days', summary.bothDays]
+      ];
+
+      const summarySheet =
+        XLSX.utils.aoa_to_sheet(summaryData);
+
+      summarySheet['!cols'] = [
+        { wch: 30 },
+        { wch: 25 }
+      ];
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        summarySheet,
+        'Monthly Summary'
+      );
+
+
+      // ========================================================
+      // SHEET 2 - OFFICE ACTIVITIES
+      // ========================================================
+
+      const activityRows = monthlyActivities.map(
+        (activity, index) => ({
+          '#': index + 1,
+          'Date': activity.activity_date
+            ? formatDate(activity.activity_date)
+            : '',
+          'Day': activity.activity_date
+            ? new Date(activity.activity_date)
+              .toLocaleDateString('en-US', {
+                weekday: 'long'
+              })
+            : '',
+          'MSL': activity.msl_username || selectedUser,
+          'Category': activity.activity_category || '',
+          'Hours Worked':
+            activity.hours_worked ?? '',
+          'Doctors Visited':
+            activity.doctors_visited ?? 0,
+          'Office': isOffice(activity) ? 'Yes' : 'No',
+          'Field': isField(activity) ? 'Yes' : 'No',
+          'Work Type': activity.work_type || '',
+          'Task / Work Done':
+            activity.summary || '',
+          'Linked Outputs':
+            activity.linked_outputs || ''
+        })
+      );
+
+      const activitySheet = XLSX.utils.json_to_sheet(
+        activityRows
+      );
+
+      activitySheet['!cols'] = [
+        { wch: 6 },
+        { wch: 15 },
+        { wch: 12 },
+        { wch: 20 },
+        { wch: 25 },
+        { wch: 15 },
+        { wch: 18 },
+        { wch: 10 },
+        { wch: 10 },
+        { wch: 20 },
+        { wch: 45 },
+        { wch: 35 }
+      ];
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        activitySheet,
+        'Office Activities'
+      );
+
+
+      // ========================================================
+      // SHEET 3 - DOCTOR VISITS
+      // ========================================================
+
+      const doctorRows = doctorInteractions.map(
+        (interaction, index) => ({
+          '#': index + 1,
+
+          'Visit Date':
+            interaction.visit_date
+              ? formatDate(interaction.visit_date)
+              : '',
+
+          'MSL':
+            interaction.msl_username || selectedUser,
+
+          'Doctor Name':
+            interaction.doctor_name || '',
+
+          'Priority Doctor':
+            interaction.is_priority_doctor
+              ? 'Yes'
+              : 'No',
+
+          'Brand 1 Discussed':
+            interaction.brand_discussed || '',
+
+          'Brand 2 Discussed':
+            interaction.brand2_discussed || '',
+
+          'Topic - Brand 1':
+            interaction.topics_discussed || '',
+
+          'Topic - Brand 2':
+            interaction.brand2_topics || '',
+
+          'Interest Level - Brand 1':
+            interaction.interest_level || '',
+
+          'Interest Level - Brand 2':
+            interaction.brand2_interest_level || '',
+
+          'Summary - Brand 1':
+            interaction.summary || '',
+
+          'Summary - Brand 2':
+            interaction.brand2_summary || '',
+
+          'Outcome - Brand 1':
+            interaction.outcomes || '',
+
+          'Outcome - Brand 2':
+            interaction.brand2_outcomes || '',
+
+          'Objections':
+            interaction.objections || '',
+
+          'Insights for Marketing':
+            interaction.insights_for_marketing || ''
+        })
+      );
+
+      const doctorSheet = XLSX.utils.json_to_sheet(
+        doctorRows
+      );
+
+      doctorSheet['!cols'] = [
+        { wch: 6 },
+        { wch: 15 },
+        { wch: 20 },
+        { wch: 25 },
+        { wch: 15 },
+        { wch: 25 },
+        { wch: 25 },
+        { wch: 30 },
+        { wch: 30 },
+        { wch: 25 },
+        { wch: 25 },
+        { wch: 40 },
+        { wch: 40 },
+        { wch: 35 },
+        { wch: 35 },
+        { wch: 35 },
+        { wch: 45 }
+      ];
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        doctorSheet,
+        'Doctor Visits'
+      );
+
+
+      // ========================================================
+      // DOWNLOAD
+      // ========================================================
+
+      const safeUserName = String(selectedUser || 'MSL')
+        .replace(/[^a-z0-9]/gi, '_');
+
+      const safeMonth = monthYear
+        .replace(/[^a-z0-9]/gi, '_');
+
+      const fileName =
+        `${safeUserName}_${safeMonth}_Activity_Report.xlsx`;
+
+      XLSX.writeFile(workbook, fileName);
+
+    } catch (error) {
+      console.error('Excel report error:', error);
+
+      alert(
+        `Failed to generate Excel report: ${error.message || 'Unknown error'
+        }`
+      );
+
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
+
+
+  /**
+   * Download PDF report.
+   */
+  /**
+   * Download PDF report (combines Office Activities & Doctor Visits into a single PDF).
+   */
+  const downloadPDFReport = async (monthYear) => {
+    try {
+      setDownloadingReport(true);
+      setShowDownloadMenu(null);
+
+      const report = await prepareMonthlyReport(monthYear);
+
+      const {
+        monthlyActivities,
+        doctorInteractions,
+        summary
+      } = report;
+
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      // ========================================================
+      // TITLE
+      // ========================================================
+      doc.setFontSize(18);
+      doc.setTextColor(40, 53, 147);
+      doc.text('Monthly Activity & Doctor Visit Report', 14, 15);
+
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`User / SO: ${selectedUser}`, 14, 22);
+      doc.text(`Report Month: ${monthYear}`, 14, 27);
+
+      // ========================================================
+      // SUMMARY
+      // ========================================================
+      autoTable(doc, {
+        startY: 32,
+        head: [
+          [
+            'Total Days Logged',
+            'Total Hours Worked',
+            'Total Doctor Visits',
+            'Office Days',
+            'Field Days',
+            'Both Done Days'
+          ]
+        ],
+        body: [
+          [
+            summary.totalDays,
+            summary.totalHours.toFixed(1),
+            summary.totalDoctors,
+            summary.officeDays,
+            summary.fieldDays,
+            summary.bothDays
+          ]
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [102, 126, 234], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 9, halign: 'center', cellPadding: 3 }
+      });
+
+      // ========================================================
+      // OFFICE ACTIVITIES
+      // ========================================================
+      let currentY = doc.lastAutoTable.finalY + 10;
+      doc.setFontSize(13);
+      doc.setTextColor(30, 41, 59);
+      doc.text('Office Activity Details', 14, currentY);
+
+      const officeRows = monthlyActivities.map(activity => [
+        activity.activity_date ? formatDate(activity.activity_date) : '',
+        activity.activity_category || '',
+        activity.hours_worked ?? '',
+        activity.doctors_visited ?? 0,
+        isOffice(activity) ? 'Yes' : 'No',
+        isField(activity) ? 'Yes' : 'No',
+        activity.work_type || '',
+        activity.summary || '',
+        activity.linked_outputs || ''
+      ]);
+
+      autoTable(doc, {
+        startY: currentY + 4,
+        head: [[
+          'Date',
+          'Category',
+          'Hours',
+          'Doctors',
+          'Office',
+          'Field',
+          'Status Note',
+          'Task / Work Done',
+          'Outputs'
+        ]],
+        body: officeRows.length > 0 ? officeRows : [['—', 'No office activities recorded', '—', '—', '—', '—', '—', '—', '—']],
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+        columnStyles: {
+          0: { cellWidth: 24 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 14 },
+          3: { cellWidth: 16 },
+          4: { cellWidth: 14 },
+          5: { cellWidth: 14 },
+          6: { cellWidth: 26 },
+          7: { cellWidth: 70 },
+          8: { cellWidth: 60 }
+        }
+      });
+
+      // ========================================================
+      // DOCTOR VISITS
+      // ========================================================
+      currentY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : 40;
+      if (currentY > 170) {
+        doc.addPage();
+        currentY = 15;
+      }
+
+      doc.setFontSize(13);
+      doc.setTextColor(30, 41, 59);
+      doc.text('Doctor Visit / Interaction Details', 14, currentY);
+
+      const doctorRows = doctorInteractions.map(int => {
+        let brandsStr = '';
+        let topicsStr = '';
+        let interestStr = '';
+        let summaryStr = '';
+        let outcomesStr = '';
+
+        if (int.brands && int.brands.length > 0) {
+          brandsStr = int.brands.map(b => b.brand_name).filter(Boolean).join(', ');
+          topicsStr = int.brands.map(b => b.topics_discussed).filter(Boolean).join('; ');
+          interestStr = int.brands.map(b => b.interest_level).filter(Boolean).join('; ');
+          summaryStr = int.brands.map(b => b.summary).filter(Boolean).join('; ') || int.summary || '';
+          outcomesStr = int.brands.map(b => b.outcomes).filter(Boolean).join('; ') || int.outcomes || '';
+        } else {
+          brandsStr = [int.brand_discussed, int.brand2_discussed].filter(Boolean).join(', ');
+          topicsStr = [int.topics_discussed, int.brand2_topics].filter(Boolean).join('; ');
+          interestStr = [int.interest_level, int.brand2_interest_level].filter(Boolean).join('; ');
+          summaryStr = [int.summary, int.brand2_summary].filter(Boolean).join('; ');
+          outcomesStr = [int.outcomes, int.brand2_outcomes].filter(Boolean).join('; ');
+        }
+
+        return [
+          int.visit_date ? formatDate(int.visit_date) : '',
+          int.doctor_name || '',
+          int.is_priority_doctor ? 'Yes' : 'No',
+          brandsStr || '—',
+          topicsStr || '—',
+          interestStr || '—',
+          summaryStr || '—',
+          outcomesStr || '—',
+          int.objections || '—'
+        ];
+      });
+
+      autoTable(doc, {
+        startY: currentY + 4,
+        head: [[
+          'Date',
+          'Doctor Name',
+          'Priority',
+          'Brands Discussed',
+          'Topics Discussed',
+          'Interest Level',
+          'Summary',
+          'Outcome',
+          'Objections'
+        ]],
+        body: doctorRows.length > 0 ? doctorRows : [['—', 'No doctor visits recorded', '—', '—', '—', '—', '—', '—', '—']],
+        theme: 'grid',
+        headStyles: { fillColor: [124, 58, 237], textColor: 255, fontSize: 8 },
+        styles: { fontSize: 6.5, cellPadding: 2, overflow: 'linebreak' },
+        columnStyles: {
+          0: { cellWidth: 22 },
+          1: { cellWidth: 35 },
+          2: { cellWidth: 14 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 35 },
+          5: { cellWidth: 22 },
+          6: { cellWidth: 40 },
+          7: { cellWidth: 35 },
+          8: { cellWidth: 30 }
+        }
+      });
+
+      // ========================================================
+      // FOOTER ON EVERY PAGE
+      // ========================================================
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page++) {
+        doc.setPage(page);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Generated on ${new Date().toLocaleString('en-IN')}`, 14, 200);
+        doc.text(`Page ${page} of ${pageCount}`, 265, 200);
+      }
+
+      // ========================================================
+      // SAVE PDF
+      // ========================================================
+      const safeUserName = String(selectedUser || 'SO_User').replace(/[^a-z0-9]/gi, '_');
+      const safeMonth = monthYear.replace(/[^a-z0-9]/gi, '_');
+      const fileName = `${safeUserName}_${safeMonth}_Activity_Report.pdf`;
+
+      doc.save(fileName);
+
+    } catch (error) {
+      console.error('PDF report error:', error);
+      alert(`Failed to generate PDF report: ${error.message || 'Unknown error'}`);
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
 
   const handleDayClick = async (activity) => {
     setSelectedDayActivity(activity);
@@ -344,11 +958,12 @@ const OfficeActivities = () => {
                     <th>Month</th>
                     <th style={{ textAlign: 'center' }}>Total Days Logged</th>
                     <th style={{ textAlign: 'center' }}>Total Hours</th>
-                    <th style={{ textAlign: 'center' }}>Total Doctors<br/><span style={{ fontSize: '10px', fontWeight: '400', color: '#888' }}>(Auto)</span></th>
+                    <th style={{ textAlign: 'center' }}>Total Doctors<br /><span style={{ fontSize: '10px', fontWeight: '400', color: '#888' }}>(Auto)</span></th>
                     <th style={{ textAlign: 'center' }}>Office Days</th>
                     <th style={{ textAlign: 'center' }}>Field Days</th>
                     <th style={{ textAlign: 'center' }}>Both Done</th>
                     <th style={{ textAlign: 'center' }}>View Details</th>
+                    <th style={{ textAlign: 'center' }}>Download Report</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -390,7 +1005,31 @@ const OfficeActivities = () => {
                           View
                         </span>
                       </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          onClick={() => downloadPDFReport(monthData.month)}
+                          disabled={downloadingReport}
+                          title={`Download PDF report for ${monthData.month}`}
+                          style={{
+                            display: 'inline-block',
+                            background: 'linear-gradient(135deg,#667eea,#764ba2)',
+                            color: 'white',
+                            padding: '6px 14px',
+                            border: 'none',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: downloadingReport ? 'not-allowed' : 'pointer',
+                            opacity: downloadingReport ? 0.6 : 1,
+                            whiteSpace: 'nowrap',
+                            boxShadow: '0 2px 4px rgba(102, 126, 234, 0.25)'
+                          }}
+                        >
+                          {downloadingReport ? 'Preparing PDF...' : '📄 Download Report'}
+                        </button>
+                      </td>
                     </tr>
+
                   ))}
                 </tbody>
               </table>
@@ -494,7 +1133,17 @@ const OfficeActivities = () => {
                 <h2 style={{ margin: 0, color: '#333' }}> {reportMonth} — Detailed Report</h2>
                 <span style={{ fontSize: '13px', color: '#888' }}>User: <strong>{selectedUser}</strong> &nbsp;|&nbsp; {modalActivities.length} activit{modalActivities.length === 1 ? 'y' : 'ies'}</span>
               </div>
-              <button onClick={() => setShowReportModal(false)} className="btn-secondary" style={{ padding: '7px 18px' }}>✕ Close</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => downloadPDFReport(reportMonth)}
+                  disabled={downloadingReport}
+                  className="btn-primary"
+                  style={{ padding: '7px 16px', fontSize: '12px' }}
+                >
+                  {downloadingReport ? 'Preparing PDF...' : '📄 Download PDF Report'}
+                </button>
+                <button onClick={() => setShowReportModal(false)} className="btn-secondary" style={{ padding: '7px 18px' }}>✕ Close</button>
+              </div>
             </div>
 
             {/* Daily Data Table */}
@@ -510,7 +1159,7 @@ const OfficeActivities = () => {
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', textAlign: 'center' }}>Office</th>
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', textAlign: 'center' }}>Field</th>
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', textAlign: 'center' }}>Hours</th>
-                      <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', textAlign: 'center' }}>Doctors Visited<br/><span style={{ fontSize: '9px', fontWeight: '400', color: '#888' }}>(Auto)</span></th>
+                      <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px', textAlign: 'center' }}>Doctors Visited<br /><span style={{ fontSize: '9px', fontWeight: '400', color: '#888' }}>(Auto)</span></th>
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px' }}>Status Note</th>
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px' }}>Category</th>
                       <th style={{ padding: '11px 14px', borderBottom: '2px solid #e0e3ff', fontSize: '13px' }}>Task / Work Done</th>
@@ -522,13 +1171,13 @@ const OfficeActivities = () => {
                       const d = new Date(a.activity_date);
                       const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
                       return (
-                        <tr 
-                          key={a.id} 
+                        <tr
+                          key={a.id}
                           onClick={() => handleDayClick(a)}
                           onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f3ff'}
                           onMouseLeave={e => e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'white' : '#fafbff'}
-                          style={{ 
-                            borderBottom: '1px solid #eef0ff', 
+                          style={{
+                            borderBottom: '1px solid #eef0ff',
                             background: idx % 2 === 0 ? 'white' : '#fafbff',
                             cursor: 'pointer',
                             transition: 'background-color 0.15s'
@@ -590,7 +1239,7 @@ const OfficeActivities = () => {
             {/* Office Activity Detail Card */}
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
               <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#4a5568', borderBottom: '1px solid #edf2f7', paddingBottom: '6px' }}>🏢 Office Activity Log</h3>
-              
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '12px' }}>
                 <div>
                   <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#718096', fontWeight: '700' }}>Category</span>
@@ -645,7 +1294,7 @@ const OfficeActivities = () => {
                           Priority: {int.is_priority_doctor ? 'Yes' : 'No'}
                         </span>
                       </div>
-                      
+
                       {int.brand_discussed && (
                         <div style={{ fontSize: '12px', marginBottom: '4px' }}>
                           <strong style={{ color: '#4b5563' }}>Brand 1 Discussed:</strong> {int.brand_discussed}
