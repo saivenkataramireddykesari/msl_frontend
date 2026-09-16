@@ -8,9 +8,10 @@
 .main-content {
   flex: 1;
   padding: 30px;
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
   width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 768px) {

@@ -12,15 +12,15 @@ const Login = () => {
   const [searchParams] = useSearchParams();
   const dataParam = searchParams.get('data');
 
-   useEffect(() => {
-     if (!dataParam && isAuthenticated && user) {
-       if (user.role === 'BM') {
-         navigate('/monthly-report', { replace: true });
-       } else {
-         navigate('/requests', { replace: true });
-       }
-     }
-   }, [dataParam, isAuthenticated, user, navigate]);
+    useEffect(() => {
+      if (!dataParam && isAuthenticated && user) {
+        if (['BM', 'Admin', 'admin', 'Asst General Manager', 'Associate Vice President'].includes(user.role)) {
+          navigate('/monthly-report', { replace: true });
+        } else {
+          navigate('/requests', { replace: true });
+        }
+      }
+    }, [dataParam, isAuthenticated, user, navigate]);
 
    const loginAttemptedRef = useRef(false);
 
@@ -69,7 +69,7 @@ const Login = () => {
            division: data.division
          });
 
-         if (data.role === 'BM') {
+         if (['BM', 'Admin', 'admin', 'Asst General Manager', 'Associate Vice President'].includes(data.role)) {
            navigate('/monthly-report', { replace: true });
          } else {
            navigate('/requests', { replace: true });

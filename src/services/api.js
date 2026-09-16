@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = (import.meta.env.VITE_API_URL || "https://msl-backend-1.onrender.com/api").replace(/\/+$/, "");
+const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
 // https://msl-backend-1.onrender.com
 const api = axios.create({
@@ -109,6 +109,11 @@ export const requestService = {
   },
   assignRequest: (id, data) => {
     return api.put(`/requests/${id}/assign`, data);
+  },
+  updateRequestDate: (id, dateStr) => {
+    return api.put(`/requests/${id}/date`, { request_date: dateStr }, {
+      params: { request_date: dateStr }
+    });
   },
   createRequest: (data) => {
     console.log(
@@ -230,21 +235,29 @@ export const activityService = {
 
 // ================= REPORTS =================
 export const reportService = {
-  getMonthlySummary: (month, year, employeeIds = null) => {
+  getRoles: () => api.get("/reports/roles"),
+
+  getMonthlySummary: (month, year, employeeIds = null, role = null) => {
     const params = new URLSearchParams();
     params.append("month", month);
     params.append("year", year);
     if (employeeIds) {
       params.append("employee_ids", employeeIds);
     }
+    if (role && role !== "All") {
+      params.append("role", role);
+    }
     return api.get(`/reports/monthly-summary?${params.toString()}`);
   },
 
-  getDailySummary: (reportDate, employeeIds = null) => {
+  getDailySummary: (reportDate, employeeIds = null, role = null) => {
     const params = new URLSearchParams();
     params.append("report_date", reportDate);
     if (employeeIds) {
       params.append("employee_ids", employeeIds);
+    }
+    if (role && role !== "All") {
+      params.append("role", role);
     }
     return api.get(`/reports/daily-summary?${params.toString()}`);
   },

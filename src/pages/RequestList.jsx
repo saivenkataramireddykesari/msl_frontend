@@ -178,6 +178,7 @@ const RequestList = () => {
                 <th>Assigned To</th>
                 <th>Number Of Visits</th>
                 <th>Requested By</th>
+                <th>Request Date</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -256,6 +257,7 @@ const RequestList = () => {
                     <span className="visits-count">{request.num_visits ?? 0}</span>
                   </td>
                   <td>{request.requested_by}</td>
+                  <td>{request.request_date ? formatDate(request.request_date) : '—'}</td>
                   <td>{formatDate(request.created_at)}</td>
                   <td>
                     <Link to={`/requests/${request.id}`} className="view-btn">

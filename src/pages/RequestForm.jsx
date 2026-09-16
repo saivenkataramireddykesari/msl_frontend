@@ -6,6 +6,14 @@ import '../styles/RequestForm.css';
 
 const PRIORITIES = ['High', 'Medium', 'Low'];
 
+const getTodayDateString = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const RequestForm = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -40,6 +48,7 @@ const RequestForm = () => {
   const [showBrandError, setShowBrandError] = useState(false); // New state for brand error
 
   const [formData, setFormData] = useState({
+    request_date: getTodayDateString(),
     doctor_id: '',
 
     region: '',
@@ -642,13 +651,24 @@ const RequestForm = () => {
     console.log('Current formData:', JSON.stringify(formData, null, 2));
 
     // Validation
+    if (!formData.request_date) {
+      setError('Please select a request date.');
+      setLoading(false);
+      return;
+    }
+
+    const todayStr = getTodayDateString();
+    if (formData.request_date < todayStr) {
+      setError('Request date must be current date or a future date.');
+      setLoading(false);
+      return;
+    }
+
     if (!formData.doctor_id || formData.doctor_id === '') {
       setError('Please select a doctor');
       setLoading(false);
       return;
     }
-
-
 
     if (!formData.region) {
       setError('Please select a region');
@@ -704,6 +724,7 @@ const RequestForm = () => {
 
       const requestPayload = {
         doctor_id: doctorId,
+        request_date: formData.request_date,
         territory: formData.territory,
         region: formData.region,
         therapy_area: formData.therapy_area,
@@ -812,6 +833,21 @@ const RequestForm = () => {
                 <small style={{ color: '#2e7d32', fontSize: '0.75rem' }}></small>
               )}
             </div>
+          </div>
+
+          <div className="form-group">
+            <label>Request Date *</label>
+            <input
+              type="date"
+              className="form-control"
+              name="request_date"
+              value={formData.request_date}
+              min={getTodayDateString()}
+              onChange={handleChange}
+            />
+            <small style={{ color: '#6c757d', fontSize: '0.75rem', display: 'block', marginTop: '4px' }}>
+              Select today's date or a future date.
+            </small>
           </div>
 
           <div className="form-group" style={{ position: 'relative' }} ref={doctorInputRef}>

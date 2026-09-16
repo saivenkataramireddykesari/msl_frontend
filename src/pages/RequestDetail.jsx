@@ -80,6 +80,36 @@ const RequestDetail = () => {
     'Asst General Manager', 'Associate Vice President', 'SBUH/BH'
   ].includes(user?.role);
 
+  const canEditRequestDate = [
+    'Asst General Manager', 'Associate Vice President'
+  ].includes(user?.role);
+
+  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [editingDateValue, setEditingDateValue] = useState('');
+  const [isSavingDate, setIsSavingDate] = useState(false);
+
+  const handleSaveRequestDate = async () => {
+    if (!editingDateValue) return;
+    const todayStr = getTodayString();
+    if (editingDateValue < todayStr) {
+      alert('Request date must be current date or a future date.');
+      return;
+    }
+    try {
+      setIsSavingDate(true);
+      await requestService.updateRequestDate(id, editingDateValue);
+      setRequest(prev => ({ ...prev, request_date: editingDateValue }));
+      setIsEditingDate(false);
+      await fetchRequestData();
+      alert('Request date updated successfully!');
+    } catch (err) {
+      console.error('Failed to update request date:', err);
+      alert(err.response?.data?.detail || 'Failed to update request date.');
+    } finally {
+      setIsSavingDate(false);
+    }
+  };
+
   useEffect(() => {
     fetchRequestData();
     fetchAllBrands(); // load brands for typeahead
@@ -543,6 +573,76 @@ const RequestDetail = () => {
             <span className="info-value">
               {formatDate(request.created_at)}
             </span>
+          </div>
+          <div className="info-item">
+            <label>Request Date</label>
+            {isEditingDate ? (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                <input
+                  type="date"
+                  value={editingDateValue}
+                  min={getTodayString()}
+                  onChange={(e) => setEditingDateValue(e.target.value)}
+                  style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px' }}
+                />
+                <button
+                  onClick={handleSaveRequestDate}
+                  disabled={isSavingDate}
+                  style={{
+                    backgroundColor: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '600'
+                  }}
+                >
+                  {isSavingDate ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => setIsEditingDate(false)}
+                  style={{
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span className="info-value">
+                  {request.request_date ? formatDate(request.request_date) : 'N/A'}
+                </span>
+                {canEditRequestDate && (
+                  <button
+                    onClick={() => {
+                      setEditingDateValue(request.request_date || getTodayString());
+                      setIsEditingDate(true);
+                    }}
+                    style={{
+                      background: '#e0e7ff',
+                      color: '#3730a3',
+                      border: '1px solid #c7d2fe',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✏️ Edit Request Date
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           {/* Priority for Brand 1 (if exists) or overall request if only one brand */}
           {(request.brand || (!request.brand && !request.brand2)) && (

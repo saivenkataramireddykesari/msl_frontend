@@ -1,6 +1,8 @@
 .request-list-container {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .list-header {
@@ -79,6 +81,7 @@
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   overflow-x: auto;
+  width: 100%;
 }
 
 .requests-table {
@@ -88,19 +91,20 @@
 
 .requests-table th {
   background: #f8f9fa;
-  padding: 16px;
+  padding: 12px 10px;
   text-align: left;
   font-weight: 600;
   color: #333;
-  font-size: 14px;
+  font-size: 13px;
   border-bottom: 2px solid #e0e0e0;
+  white-space: nowrap;
 }
 
 .requests-table td {
-  padding: 16px;
+  padding: 12px 10px;
   border-bottom: 1px solid #e0e0e0;
   color: #666;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .requests-table tr:hover {

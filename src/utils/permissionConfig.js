@@ -11,7 +11,9 @@ const ROLE_PERMISSIONS = {
     NE: ["CREATE_REQUEST"],
 
     MSL: [],
-    "Scientific Officer": []
+    "Scientific Officer": [],
+    Admin: ["CREATE_REQUEST", "VIEW_MONTHLY_REPORT"],
+    admin: ["CREATE_REQUEST", "VIEW_MONTHLY_REPORT"]
 };
 
 export { ROLE_PERMISSIONS };

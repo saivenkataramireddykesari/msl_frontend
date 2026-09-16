@@ -24,17 +24,19 @@ const Navbar = () => {
       'Scientific Officer': 'Scientific Officer',
       'SBUH/BH': 'SBUH/BH',
       'Asst General Manager': 'Asst General Manager',
-      'Associate Vice President': 'Associate Vice President'
+      'Associate Vice President': 'Associate Vice President',
+      'Admin': 'Administrator',
+      'admin': 'Administrator'
     };
     return roles[role] || role;
   };
 
-  const canAccessActivities = ['MSL', 'Scientific Officer', 'Asst General Manager', 'Associate Vice President'].includes(user?.role);
-  const canAccessMonthlyReport = ['BM', 'Asst General Manager', 'Associate Vice President'].includes(user?.role);
+  const canAccessActivities = ['MSL', 'Scientific Officer', 'Asst General Manager', 'Associate Vice President', 'Admin', 'admin'].includes(user?.role);
+  const canAccessMonthlyReport = ['BM', 'Asst General Manager', 'Associate Vice President', 'Admin', 'admin'].includes(user?.role);
 
   // Determine landing page based on role
   const getLandingPage = () => {
-    if (user?.role === 'BM') return '/monthly-report';
+    if (['BM', 'Admin', 'admin'].includes(user?.role)) return '/monthly-report';
     return '/requests';
   };
 
@@ -53,7 +55,7 @@ const Navbar = () => {
           <Link to="/office-activities" className="nav-link">Activities</Link>
         )}
         {canAccessMonthlyReport && (
-          <Link to="/monthly-report" className="nav-link">Monthly Report</Link>
+          <Link to="/monthly-report" className="nav-link">Reports</Link>
         )}
       </div>
 
