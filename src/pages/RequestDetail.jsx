@@ -898,25 +898,89 @@ const RequestDetail = () => {
                 )}
               </div>
             ) : (
-              <div className="timeline-table-container" style={{ marginTop: '20px' }}>
+              <div className="timeline-table-container" style={{ marginTop: '20px', overflowX: 'auto' }}>
                 <table className="timeline-table" style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                   <thead>
                     <tr style={{ background: 'linear-gradient(135deg, #667eea, #764ba2)', color: 'white' }}>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px' }}>Date</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px' }}>MSL Name</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px', minWidth: '100px' }}>Date</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px', minWidth: '120px' }}>MSL Name</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px', minWidth: '130px' }}>Brand(s)</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px', minWidth: '180px' }}>Topics & Objective</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px', minWidth: '200px' }}>Discussion Summary</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px', minWidth: '180px' }}>Outcome & Objections</th>
                     </tr>
                   </thead>
                   <tbody>
                     {logs.map((log, index) => {
                       console.log('Log entry:', log);
                       const mslName = log.logged_by || (log.title && log.title.replace('Visit by ', '')) || 'Unknown';
+                      const interaction = request.doctor_interactions?.find(i => i.id === log.id);
+                      const brandsList = (log.brands_detail && log.brands_detail.length > 0)
+                        ? log.brands_detail
+                        : (interaction?.brands || []);
+                      
                       return (
                         <tr key={`${log.type}-${log.id}`} style={{ borderBottom: '1px solid #e5e7eb', background: index % 2 === 0 ? 'white' : '#f9fafb' }}>
-                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#374151', whiteSpace: 'nowrap' }}>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#374151', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
                             {formatDate(log.date)}
                           </td>
-                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#111827', fontWeight: '500' }}>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#111827', fontWeight: '600', verticalAlign: 'top' }}>
                             {mslName}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#374151', verticalAlign: 'top' }}>
+                            {brandsList && brandsList.length > 0 ? (
+                              brandsList.map((b, bIdx) => (
+                                <div key={bIdx} style={{ marginBottom: '6px' }}>
+                                  <span style={{ fontWeight: '600', color: '#047857' }}>{b.brand_name}</span>
+                                  {b.interest_level && (
+                                    <span style={{ marginLeft: '6px', fontSize: '11px', background: '#d1fae5', color: '#065f46', padding: '1px 6px', borderRadius: '4px' }}>
+                                      {b.interest_level}
+                                    </span>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <span>{log.brands?.join(', ') || interaction?.brand_discussed || '—'}</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#374151', verticalAlign: 'top' }}>
+                            {brandsList && brandsList.length > 0 ? (
+                              brandsList.map((b, bIdx) => (
+                                <div key={bIdx} style={{ marginBottom: '6px' }}>
+                                  {b.objective && <div><strong>Obj:</strong> {b.objective}</div>}
+                                  {b.topics_discussed && <div><strong>Topic:</strong> {b.topics_discussed}</div>}
+                                </div>
+                              ))
+                            ) : (
+                              <span>{interaction?.topics_discussed || '—'}</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#374151', verticalAlign: 'top' }}>
+                            {brandsList && brandsList.length > 0 ? (
+                              brandsList.map((b, bIdx) => (
+                                <div key={bIdx} style={{ marginBottom: '4px' }}>
+                                  {b.summary ? b.summary : '—'}
+                                </div>
+                              ))
+                            ) : (
+                              <span>{interaction?.summary || '—'}</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', color: '#374151', verticalAlign: 'top' }}>
+                            {brandsList && brandsList.length > 0 ? (
+                              brandsList.map((b, bIdx) => (
+                                <div key={bIdx} style={{ marginBottom: '4px' }}>
+                                  {b.outcomes && <div><strong>Outcome:</strong> {b.outcomes}</div>}
+                                </div>
+                              ))
+                            ) : (
+                              <div>{interaction?.outcomes || '—'}</div>
+                            )}
+                            {(log.details || interaction?.objections) && (
+                              <div style={{ color: '#b91c1c', marginTop: '4px', fontSize: '12px' }}>
+                                <strong>Objection:</strong> {log.details || interaction?.objections}
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );
