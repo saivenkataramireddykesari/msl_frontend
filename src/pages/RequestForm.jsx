@@ -657,13 +657,6 @@ const RequestForm = () => {
       return;
     }
 
-    const todayStr = getTodayDateString();
-    if (formData.request_date < todayStr) {
-      setError('Request date must be current date or a future date.');
-      setLoading(false);
-      return;
-    }
-
     if (!formData.doctor_id || formData.doctor_id === '') {
       setError('Please select a doctor');
       setLoading(false);
@@ -842,12 +835,8 @@ const RequestForm = () => {
               className="form-control"
               name="request_date"
               value={formData.request_date}
-              min={getTodayDateString()}
               onChange={handleChange}
             />
-            <small style={{ color: '#6c757d', fontSize: '0.75rem', display: 'block', marginTop: '4px' }}>
-              Select today's date or a future date.
-            </small>
           </div>
 
           <div className="form-group" style={{ position: 'relative' }} ref={doctorInputRef}>

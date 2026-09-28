@@ -90,11 +90,6 @@ const RequestDetail = () => {
 
   const handleSaveRequestDate = async () => {
     if (!editingDateValue) return;
-    const todayStr = getTodayString();
-    if (editingDateValue < todayStr) {
-      alert('Request date must be current date or a future date.');
-      return;
-    }
     try {
       setIsSavingDate(true);
       await requestService.updateRequestDate(id, editingDateValue);
@@ -581,7 +576,6 @@ const RequestDetail = () => {
                 <input
                   type="date"
                   value={editingDateValue}
-                  min={getTodayString()}
                   onChange={(e) => setEditingDateValue(e.target.value)}
                   style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px' }}
                 />
