@@ -279,4 +279,19 @@ export const hierarchyService = {
   }
 };
 
+// ================= PLANNED VISITS =================
+export const plannedVisitsService = {
+  getPlannedVisits: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.region) queryParams.append("region", params.region);
+    if (params.territory) queryParams.append("territory", params.territory);
+    if (params.scientific_officer) queryParams.append("scientific_officer", params.scientific_officer);
+    if (params.requested_by) queryParams.append("requested_by", params.requested_by);
+    if (params.month) queryParams.append("month", params.month);
+    if (params.year) queryParams.append("year", params.year);
+    if (params.search) queryParams.append("search", params.search);
+    return api.get(`/planned-visits?${queryParams.toString()}`);
+  }
+};
+
 export default api;

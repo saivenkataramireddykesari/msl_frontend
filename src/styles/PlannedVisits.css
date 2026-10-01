@@ -1,0 +1,701 @@
+.planned-visits-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.pv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.pv-header h1 {
+  font-size: 26px;
+  color: #1e293b;
+  margin: 0 0 6px 0;
+  font-weight: 700;
+}
+
+.pv-subtitle {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0;
+}
+
+.export-btn {
+  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.export-btn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+/* Stats Cards */
+.pv-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.pv-stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.pv-stat-card .stat-value {
+  font-size: 32px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.pv-stat-card .stat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.highlight-blue .stat-value {
+  color: #2563eb;
+}
+
+.highlight-purple .stat-value {
+  color: #7c3aed;
+}
+
+.highlight-green .stat-value {
+  color: #16a34a;
+}
+
+/* Filter Card */
+.pv-filter-card {
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 24px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.pv-filter-form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.search-group {
+  display: flex;
+  flex: 1 1 280px;
+  gap: 8px;
+}
+
+.pv-input,
+.pv-select {
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  background-color: white;
+  transition: border-color 0.2s;
+}
+
+.pv-input {
+  flex: 1;
+}
+
+.pv-input:focus,
+.pv-select:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.pv-select {
+  min-width: 140px;
+  cursor: pointer;
+}
+
+.search-btn {
+  background: #1e293b;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-btn:hover {
+  background: #0f172a;
+}
+
+.reset-btn {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reset-btn:hover {
+  background: #e2e8f0;
+}
+
+/* Error Alert */
+.error-alert {
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  margin-bottom: 20px;
+}
+
+/* Loading & No Data */
+.pv-loading {
+  text-align: center;
+  padding: 40px;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid #e2e8f0;
+  border-top: 4px solid #4f46e5;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.no-data-card {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+}
+
+/* Main Table */
+.pv-table-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow-x: visible; /* Allow filter popup to extend if needed */
+}
+
+.pv-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.pv-table th {
+  background: #f8fafc;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #cbd5e1;
+  text-align: left;
+  vertical-align: middle;
+  position: relative;
+}
+
+.pv-table th.menu-active {
+  background: #edf2f7;
+}
+
+/* Header Inner Layout */
+.th-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.th-label {
+  cursor: pointer;
+  user-select: none;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.th-label:hover {
+  color: #1e293b;
+}
+
+.sort-badge {
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.filter-icon-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.filter-icon-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.filter-icon-btn.is-filtered {
+  color: #4f46e5;
+  background: #e0e7ff;
+}
+
+.filter-icon-btn.active {
+  background: #cbd5e1;
+  color: #0f172a;
+}
+
+/* Excel Filter Menu Modal */
+.excel-filter-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  width: 250px;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  padding: 10px;
+  text-transform: none;
+  font-weight: normal;
+  letter-spacing: normal;
+  color: #334155;
+  margin-top: 4px;
+}
+
+.excel-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  font-size: 12px;
+  color: #1e293b;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.excel-close-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.excel-close-btn:hover {
+  color: #0f172a;
+}
+
+.excel-sort-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.excel-sort-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid transparent;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.excel-sort-item:hover {
+  background: #f1f5f9;
+  color: #4f46e5;
+}
+
+.excel-sort-item.active {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.excel-sort-item .icon {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.excel-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 8px 0;
+}
+
+.excel-values-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.excel-search-box {
+  width: 100%;
+}
+
+.excel-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.excel-search-input:focus {
+  border-color: #4f46e5;
+}
+
+.excel-checkbox-list {
+  max-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #f1f5f9;
+  border-radius: 6px;
+  padding: 6px;
+  background: #fafafa;
+}
+
+.excel-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  user-select: none;
+}
+
+.excel-checkbox-item:hover {
+  background: #e2e8f0;
+}
+
+.excel-checkbox-item input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.excel-checkbox-item .val-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.excel-checkbox-item .val-count {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.excel-menu-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.excel-footer-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+}
+
+.excel-footer-btn.clear {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.excel-footer-btn.clear:hover {
+  background: #e2e8f0;
+}
+
+.excel-footer-btn.apply {
+  background: #4f46e5;
+  color: white;
+}
+
+.excel-footer-btn.apply:hover {
+  background: #3730a3;
+}
+
+/* Rows & Columns */
+.pv-row {
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pv-row:hover {
+  background-color: #f8fafc;
+}
+
+.pv-row.row-expanded {
+  background-color: #f1f5f9;
+  border-bottom: none;
+}
+
+.pv-table td {
+  padding: 14px 16px;
+  font-size: 14px;
+  color: #334155;
+  vertical-align: middle;
+}
+
+/* Column Specific Alignments & Widths */
+.th-scientific_officer, .td-so {
+  width: 22%;
+  text-align: left;
+}
+
+.th-region, .td-region {
+  width: 14%;
+  text-align: left;
+  font-weight: 500;
+}
+
+.th-territory, .td-territory {
+  width: 18%;
+  text-align: left;
+  font-weight: 500;
+}
+
+.th-requested_date, .td-date {
+  width: 14%;
+  text-align: left;
+  color: #475569;
+}
+
+.th-count_planned_doctors, .td-count {
+  width: 13%;
+  text-align: left;
+}
+
+.th-requested_by, .td-bl {
+  width: 12%;
+  text-align: left;
+}
+
+.th-action, .td-action {
+  width: 7%;
+  text-align: center;
+}
+
+/* Cell Elements */
+.cell-so {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.so-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.so-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.badge-count {
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 12px;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.bl-name {
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.toggle-details-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.toggle-details-btn:hover {
+  background: #4f46e5;
+  color: white;
+  border-color: #4f46e5;
+}
+
+/* Nested Details Drawer Row */
+.expanded-detail-row td {
+  padding: 0 !important;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+.nested-details-panel {
+  background: #f8fafc;
+  padding: 16px 24px 20px 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.nested-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.nested-table th {
+  background: #f1f5f9;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+  text-transform: uppercase;
+}
+
+.nested-table td {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.nested-table tr:last-child td {
+  border-bottom: none;
+}
+
+.doc-name-cell {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.status-pill {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  display: inline-block;
+}
+
+.status-pill.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-pill.in-progress {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-pill.completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.view-link {
+  color: #4f46e5;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.view-link:hover {
+  text-decoration: underline;
+}

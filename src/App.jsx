@@ -10,6 +10,7 @@ import RequestDetail from './pages/RequestDetail';
 import DoctorManagement from './pages/DoctorManagement';
 import OfficeActivities from './pages/OfficeActivities';
 import MonthlyReport from './pages/MonthlyReport';
+import PlannedVisits from './pages/PlannedVisits';
 import './App.css';
 import MaintenancePage from './components/MaintenancePage';
 
@@ -44,6 +45,7 @@ function App() {
             <Route path="requests/new" element={<ProtectedRoute permission="CREATE_REQUEST"><RequestForm /></ProtectedRoute>} />
             <Route path="requests/:id" element={<RequestDetail />} />
             <Route path="doctors" element={<DoctorManagement />} />
+            <Route path="planned-visits" element={<ProtectedRoute permission="VIEW_PLANNED_VISITS"><PlannedVisits /></ProtectedRoute>} />
             <Route path="office-activities" element={<OfficeActivities />} />
             <Route path="monthly-report" element={<ProtectedRoute permission="VIEW_MONTHLY_REPORT"><MonthlyReport /></ProtectedRoute>} />
           </Route>

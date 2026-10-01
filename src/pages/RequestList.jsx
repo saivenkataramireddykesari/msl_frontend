@@ -6,6 +6,21 @@ import '../styles/RequestList.css';
 
 const CLASSIFICATIONS = ['All', 'potential', 'non-potential', 'default'];
 
+const MONTHS = [
+  { value: '1', label: 'January' },
+  { value: '2', label: 'February' },
+  { value: '3', label: 'March' },
+  { value: '4', label: 'April' },
+  { value: '5', label: 'May' },
+  { value: '6', label: 'June' },
+  { value: '7', label: 'July' },
+  { value: '8', label: 'August' },
+  { value: '9', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+];
+
 const RequestList = () => {
   const { user, canCreateRequest } = useAuth();
   const [requests, setRequests] = useState([]);
@@ -17,6 +32,9 @@ const RequestList = () => {
   const [filterRegion, setFilterRegion] = useState('');
   const [filterTherapy, setFilterTherapy] = useState('');
   const [filterClassification, setFilterClassification] = useState('All');
+  const [filterAssignment, setFilterAssignment] = useState('All');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterYear, setFilterYear] = useState('');
 
   useEffect(() => {
     fetchRequests();
@@ -30,9 +48,36 @@ const RequestList = () => {
       data = data.filter(r => r.user_classification === filterClassification);
     }
 
+    if (filterAssignment === 'Assigned') {
+      data = data.filter(r => r.assigned_msl && r.assigned_msl.trim() !== '');
+    } else if (filterAssignment === 'Unassigned') {
+      data = data.filter(r => !r.assigned_msl || r.assigned_msl.trim() === '');
+    }
+
+    if (filterMonth) {
+      data = data.filter(r => {
+        const dateStr = r.request_date || r.created_at;
+        if (!dateStr) return false;
+        const d = new Date(dateStr);
+        return (d.getMonth() + 1).toString() === filterMonth;
+      });
+    }
+
+    if (filterYear) {
+      data = data.filter(r => {
+        const dateStr = r.request_date || r.created_at;
+        if (!dateStr) return false;
+        const d = new Date(dateStr);
+        return d.getFullYear().toString() === filterYear;
+      });
+    }
+
     if (search) {
+      const s = search.toLowerCase();
       data = data.filter(r =>
-        r.doctor_name?.toLowerCase().includes(search.toLowerCase())
+        r.doctor_name?.toLowerCase().includes(s) ||
+        r.requested_by?.toLowerCase().includes(s) ||
+        r.assigned_msl?.toLowerCase().includes(s)
       );
     }
 
@@ -49,7 +94,7 @@ const RequestList = () => {
     }
 
     setFilteredRequests(data);
-  }, [filterClassification, search, filterTerritory, filterRegion, filterTherapy, requests]);
+  }, [filterClassification, filterAssignment, filterMonth, filterYear, search, filterTerritory, filterRegion, filterTherapy, requests]);
 
   const fetchRequests = async () => {
     try {
@@ -130,10 +175,30 @@ const RequestList = () => {
       <div className="filters">
         <input
           type="text"
-          placeholder="Search doctor..."
+          placeholder="Search doctor, requested by, or assigned MSL..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+
+        <select onChange={(e) => setFilterAssignment(e.target.value)} value={filterAssignment}>
+          <option value="All">All Requests (Assigned & Unassigned)</option>
+          <option value="Assigned">Assigned Requests</option>
+          <option value="Unassigned">Unassigned Requests</option>
+        </select>
+
+        <select onChange={(e) => setFilterMonth(e.target.value)} value={filterMonth}>
+          <option value="">All Months</option>
+          {MONTHS.map(m => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
+
+        <select onChange={(e) => setFilterYear(e.target.value)} value={filterYear}>
+          <option value="">All Years</option>
+          {['2026', '2025', '2024'].map(y => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
 
         <select onChange={(e) => setFilterTerritory(e.target.value)} value={filterTerritory}>
           <option value="">All Territories</option>
