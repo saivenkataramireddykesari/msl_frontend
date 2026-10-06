@@ -932,3 +932,38 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Initial Report Prompt */
+.initial-report-prompt {
+  background: white;
+  padding: 48px 24px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e9ecef;
+  margin-top: 10px;
+}
+
+.initial-report-prompt .prompt-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.initial-report-prompt h3 {
+  font-size: 1.3rem;
+  color: #1e293b;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.initial-report-prompt p {
+  color: #64748b;
+  font-size: 0.95rem;
+  max-width: 520px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.initial-report-prompt strong {
+  color: #667eea;
+}

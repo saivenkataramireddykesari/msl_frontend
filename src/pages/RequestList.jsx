@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { requestService } from '../services/api';
+import { requestService, userService } from '../services/api';
 import '../styles/RequestList.css';
 
 const CLASSIFICATIONS = ['All', 'potential', 'non-potential', 'default'];
@@ -21,6 +21,9 @@ const MONTHS = [
   { value: '12', label: 'December' },
 ];
 
+const CAN_ASSIGN_ROLES = ['Asst General Manager', 'Associate Vice President', 'Admin', 'admin'];
+const CAN_EDIT_DATE_ROLES = ['Asst General Manager', 'Associate Vice President', 'Admin', 'admin'];
+
 const RequestList = () => {
   const { user, canCreateRequest } = useAuth();
   const [requests, setRequests] = useState([]);
@@ -36,9 +39,38 @@ const RequestList = () => {
   const [filterMonth, setFilterMonth] = useState('');
   const [filterYear, setFilterYear] = useState('');
 
+  // Bulk assignment state
+  const [selectedRequestIds, setSelectedRequestIds] = useState([]);
+  const [mslList, setMslList] = useState([]);
+  const [bulkMsl, setBulkMsl] = useState('');
+  const [isBulkAssigning, setIsBulkAssigning] = useState(false);
+
+  // Inline Request Date edit state
+  const [editingDateId, setEditingDateId] = useState(null);
+  const [editingDateValue, setEditingDateValue] = useState('');
+  const [isSavingDate, setIsSavingDate] = useState(false);
+
+  const canBulkAssign = CAN_ASSIGN_ROLES.includes(user?.role);
+  const canEditDate = CAN_EDIT_DATE_ROLES.includes(user?.role);
+
   useEffect(() => {
     fetchRequests();
   }, [user]);
+
+  useEffect(() => {
+    if (canBulkAssign) {
+      fetchMslUsers();
+    }
+  }, [user, canBulkAssign]);
+
+  const fetchMslUsers = async () => {
+    try {
+      const res = await userService.getMslUsers();
+      setMslList(res.data || []);
+    } catch (err) {
+      console.error('Error fetching Scientific Officers / MSLs:', err);
+    }
+  };
 
   // Merged filter logic
   useEffect(() => {
@@ -132,6 +164,73 @@ const RequestList = () => {
     });
   };
 
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const visibleIds = filteredRequests.map(r => r.id);
+      setSelectedRequestIds(visibleIds);
+    } else {
+      setSelectedRequestIds([]);
+    }
+  };
+
+  const handleSelectRequest = (id) => {
+    setSelectedRequestIds(prev =>
+      prev.includes(id) ? prev.filter(reqId => reqId !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkAssign = async () => {
+    if (selectedRequestIds.length === 0) {
+      alert('Please select at least one request to assign.');
+      return;
+    }
+
+    if (!bulkMsl) {
+      alert('Please select a Scientific Officer to assign.');
+      return;
+    }
+
+    const confirmMsg = `Are you sure you want to assign ${selectedRequestIds.length} request(s) to ${bulkMsl}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setIsBulkAssigning(true);
+      await requestService.bulkAssignRequests({
+        request_ids: selectedRequestIds,
+        assigned_msl: bulkMsl,
+        assigned_by: user?.username || user?.employee_id || 'Manager'
+      });
+      alert(`Successfully assigned ${selectedRequestIds.length} request(s) to ${bulkMsl}`);
+      setSelectedRequestIds([]);
+      setBulkMsl('');
+      await fetchRequests();
+    } catch (error) {
+      console.error('Error bulk assigning requests:', error);
+      alert(error.response?.data?.detail || 'Failed to assign requests. Please try again.');
+    } finally {
+      setIsBulkAssigning(false);
+    }
+  };
+
+  const handleSaveDate = async (requestId) => {
+    if (!editingDateValue) {
+      alert('Please select a valid date.');
+      return;
+    }
+    try {
+      setIsSavingDate(true);
+      await requestService.updateRequestDate(requestId, editingDateValue);
+      setRequests(prev => prev.map(r => r.id === requestId ? { ...r, request_date: editingDateValue } : r));
+      setEditingDateId(null);
+      setEditingDateValue('');
+    } catch (err) {
+      console.error('Error updating request date:', err);
+      alert(err.response?.data?.detail || 'Failed to update request date.');
+    } finally {
+      setIsSavingDate(false);
+    }
+  };
+
   if (loading) {
     return <div className="loading">Loading requests...</div>;
   }
@@ -222,6 +321,52 @@ const RequestList = () => {
         </select>
       </div>
 
+      {/* Bulk Assign Toolbar for Asst General Manager & Associate Vice President */}
+      {canBulkAssign && (
+        <div className="bulk-assign-bar">
+          <div className="bulk-assign-info">
+            <span className="selected-count-badge">
+              {selectedRequestIds.length} request{selectedRequestIds.length === 1 ? '' : 's'} selected
+            </span>
+            <span>Assign selected requests to:</span>
+          </div>
+
+          <div className="bulk-assign-controls">
+            <select
+              value={bulkMsl}
+              onChange={(e) => setBulkMsl(e.target.value)}
+              disabled={isBulkAssigning}
+              className="bulk-assign-select"
+            >
+              <option value="">-- Select Scientific Officer --</option>
+              {mslList.map((msl) => (
+                <option key={msl.id} value={msl.username}>
+                  {msl.username} ({msl.role})
+                </option>
+              ))}
+            </select>
+
+            <button
+              className="bulk-assign-btn"
+              onClick={handleBulkAssign}
+              disabled={isBulkAssigning || selectedRequestIds.length === 0 || !bulkMsl}
+            >
+              {isBulkAssigning ? 'Assigning...' : 'Assign Selected'}
+            </button>
+
+            {selectedRequestIds.length > 0 && (
+              <button
+                className="bulk-clear-btn"
+                onClick={() => setSelectedRequestIds([])}
+                disabled={isBulkAssigning}
+              >
+                Clear Selection
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {filteredRequests.length === 0 ? (
         <div className="empty-state">
           <p>No requests found.</p>
@@ -231,6 +376,19 @@ const RequestList = () => {
           <table className="requests-table">
             <thead>
               <tr>
+                {canBulkAssign && (
+                  <th style={{ width: '40px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredRequests.length > 0 &&
+                        filteredRequests.every(r => selectedRequestIds.includes(r.id))
+                      }
+                      onChange={handleSelectAll}
+                      title="Select / Deselect all visible requests"
+                    />
+                  </th>
+                )}
                 <th>Request ID</th>
                 <th>Region</th>
                 <th>Territory</th>
@@ -252,6 +410,15 @@ const RequestList = () => {
             <tbody>
               {filteredRequests.map((request) => (
                 <tr key={request.id}>
+                  {canBulkAssign && (
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedRequestIds.includes(request.id)}
+                        onChange={() => handleSelectRequest(request.id)}
+                      />
+                    </td>
+                  )}
                   <td>#{request.id}</td>
                   <td>{request.region}</td>
                   <td>{request.territory}</td>
@@ -267,19 +434,6 @@ const RequestList = () => {
                       </>
                     )}
                   </td>
-                  {/* <td>
-                    {request.brand && request.priority && (
-                      <span className={`priority-badge ${request.priority?.toLowerCase()}`}>
-                        {request.priority}
-                      </span>
-                    )}
-                    {request.brand2 && request.priority2 && (
-                      <span className={`priority-badge ${request.priority2?.toLowerCase()}`} style={{ marginTop: '5px', display: 'block' }}>
-                        {request.priority2}
-                      </span>
-                    )}
-                    {(!request.brand || !request.priority) && (!request.brand2 || !request.priority2) && '—'}
-                  </td> */}
                   <td>
                     {request.brand ? (
                       <span className={`status-badge ${(request.rx_status_brand1 || 'default')?.toLowerCase().replace(' ', '-')}`}>
@@ -322,7 +476,56 @@ const RequestList = () => {
                     <span className="visits-count">{request.num_visits ?? 0}</span>
                   </td>
                   <td>{request.requested_by}</td>
-                  <td>{request.request_date ? formatDate(request.request_date) : '—'}</td>
+                  <td>
+                    {canEditDate ? (
+                      editingDateId === request.id ? (
+                        <div className="date-edit-container">
+                          <input
+                            type="date"
+                            value={editingDateValue}
+                            onChange={(e) => setEditingDateValue(e.target.value)}
+                            className="date-edit-input"
+                            disabled={isSavingDate}
+                          />
+                          <button
+                            className="date-save-btn"
+                            onClick={() => handleSaveDate(request.id)}
+                            disabled={isSavingDate}
+                            title="Save date"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            className="date-cancel-btn"
+                            onClick={() => {
+                              setEditingDateId(null);
+                              setEditingDateValue('');
+                            }}
+                            disabled={isSavingDate}
+                            title="Cancel"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="date-display-container">
+                          <span>{request.request_date ? formatDate(request.request_date) : '—'}</span>
+                          <button
+                            className="date-edit-trigger"
+                            onClick={() => {
+                              setEditingDateId(request.id);
+                              setEditingDateValue(request.request_date ? request.request_date.split('T')[0] : '');
+                            }}
+                            title="Edit Request Date"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                      )
+                    ) : (
+                      request.request_date ? formatDate(request.request_date) : '—'
+                    )}
+                  </td>
                   <td>{formatDate(request.created_at)}</td>
                   <td>
                     <Link to={`/requests/${request.id}`} className="view-btn">

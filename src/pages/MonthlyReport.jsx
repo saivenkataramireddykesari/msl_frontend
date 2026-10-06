@@ -139,12 +139,7 @@ const MonthlyReport = () => {
     }
   }, [reportType, month, year, selectedDate, employeeIds, selectedRole]);
 
-  // Initial load / auto-fetch on filter change
-  useEffect(() => {
-    if (user) {
-      fetchReport();
-    }
-  }, [user, reportType, month, year, selectedDate, selectedRole, fetchReport]);
+  // Note: Initial auto-fetch removed. Report data is fetched when the user clicks "Generate Report".
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -265,6 +260,7 @@ const MonthlyReport = () => {
               checked={reportType === "monthly"}
               onChange={() => {
                 setReportType("monthly");
+                setReport(null);
                 setSelectedEmployee(null);
               }}
             />
@@ -277,6 +273,7 @@ const MonthlyReport = () => {
               checked={reportType === "daily"}
               onChange={() => {
                 setReportType("daily");
+                setReport(null);
                 setSelectedEmployee(null);
               }}
             />
@@ -384,6 +381,17 @@ const MonthlyReport = () => {
         <div className="loading-container">
           <div className="loading-spinner"></div>
           <p>Generating working report...</p>
+        </div>
+      )}
+
+      {!report && !loading && !error && (
+        <div className="initial-report-prompt">
+          <div className="prompt-icon">📊</div>
+          <h3>Select Filter Criteria</h3>
+          <p>
+            Please select your desired filter criteria above and click{" "}
+            <strong>"Generate Report"</strong> to view the report data.
+          </p>
         </div>
       )}
 

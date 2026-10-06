@@ -111,6 +111,9 @@ export const requestService = {
   assignRequest: (id, data) => {
     return api.put(`/requests/${id}/assign`, data);
   },
+  bulkAssignRequests: (data) => {
+    return api.put("/requests/bulk-assign", data);
+  },
   updateRequestDate: (id, dateStr) => {
     return api.put(`/requests/${id}/date`, { request_date: dateStr }, {
       params: { request_date: dateStr }
