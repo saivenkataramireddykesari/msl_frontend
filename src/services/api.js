@@ -2,7 +2,7 @@ import axios from "axios";
 
 const API_URL = (import.meta.env.VITE_API_URL || "https://msl-backend-2.onrender.com").replace(/\/+$/, "");
 
-// 
+// https://msl-backend-2.onrender.com   ,, http://localhost:8000
 
 const api = axios.create({
   baseURL: API_URL,
@@ -294,6 +294,39 @@ export const plannedVisitsService = {
     if (params.year) queryParams.append("year", params.year);
     if (params.search) queryParams.append("search", params.search);
     return api.get(`/planned-visits?${queryParams.toString()}`);
+  }
+};
+
+// ================= TOUR PLANS =================
+export const tourPlanService = {
+  getMeta: () => api.get("/tour-plans/meta"),
+  getTerritories: (divisions = []) => {
+    const params = new URLSearchParams();
+    if (divisions && divisions.length > 0) {
+      params.append("divisions", Array.isArray(divisions) ? divisions.join(",") : divisions);
+    }
+    return api.get(`/tour-plans/territories?${params.toString()}`);
+  },
+  createTourPlan: (data, role = null, username = null) => {
+    const params = new URLSearchParams();
+    if (role) params.append("current_user_role", role);
+    if (username) params.append("current_user_name", username);
+    return api.post(`/tour-plans?${params.toString()}`, data);
+  },
+  getTourPlans: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.role) queryParams.append("role", params.role);
+    if (params.username) queryParams.append("username", params.username);
+    if (params.employee_id) queryParams.append("employee_id", params.employee_id);
+    if (params.division) queryParams.append("division", params.division);
+    if (params.month) queryParams.append("month", params.month);
+    if (params.year) queryParams.append("year", params.year);
+    return api.get(`/tour-plans?${queryParams.toString()}`);
+  },
+  deleteTourPlan: (id, role = null) => {
+    const params = new URLSearchParams();
+    if (role) params.append("current_user_role", role);
+    return api.delete(`/tour-plans/${id}?${params.toString()}`);
   }
 };
 

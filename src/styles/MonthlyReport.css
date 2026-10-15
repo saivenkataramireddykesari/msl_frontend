@@ -897,39 +897,99 @@
 /* Responsive */
 @media (max-width: 768px) {
   .monthly-report {
-    padding: 12px;
+    padding: 10px 4px;
   }
 
   .report-header h1 {
     font-size: 1.4rem;
   }
 
+  .report-filters {
+    padding: 16px 14px;
+    border-radius: 12px;
+  }
+
+  .report-type-selector {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .type-radio {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+
   .filters-form {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
 
   .filter-group select,
   .filter-group input {
     width: 100%;
+    box-sizing: border-box;
   }
 
   .report-action-header {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
 
   .export-buttons-group {
     width: 100%;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .btn-export {
-    flex: 1;
+    width: 100%;
     justify-content: center;
+    padding: 10px 14px;
   }
 
   .summary-cards {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+  }
+
+  .employees-overview-table {
+    min-width: 680px;
+  }
+
+  .daily-summary-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+  }
+
+  .daily-summary-table {
+    min-width: 620px;
+  }
+
+  .employee-detail {
+    padding: 16px 12px;
+    border-radius: 12px;
+  }
+
+  .detail-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .detail-header-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 

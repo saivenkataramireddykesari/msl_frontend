@@ -332,8 +332,8 @@
 @media (max-width: 768px) {
   .list-header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
+    align-items: stretch;
+    gap: 14px;
     margin-bottom: 20px;
   }
   
@@ -344,11 +344,34 @@
   .log-activity-btn {
     width: 100%;
     text-align: center;
-    padding: 10px 20px;
+    padding: 12px 20px;
+    justify-content: center;
+  }
+
+  .users-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .activities-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 10px;
+  }
+
+  .activities-table {
+    min-width: 680px;
   }
   
   .modal-overlay {
-    padding: 10px;
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal {
+    padding: 20px 16px;
+    border-radius: 16px 16px 10px 10px;
+    max-height: 92vh;
   }
 
   .modal-actions {
@@ -358,5 +381,12 @@
   
   .modal-actions button {
     width: 100%;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .user-card {
+    padding: 18px 14px;
   }
 }

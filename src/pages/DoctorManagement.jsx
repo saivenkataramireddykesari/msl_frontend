@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { doctorService } from '../services/api';
 import '../styles/DoctorManagement.css';
@@ -17,7 +17,7 @@ const DoctorManagement = () => {
     try {
       setLoading(true);
       const response = await doctorService.getDoctors();
-      setDoctors(response.data);
+      setDoctors(response.data || []);
     } catch (error) {
       console.error('Error fetching doctors:', error);
     } finally {
@@ -29,18 +29,22 @@ const DoctorManagement = () => {
     setExpandedRow(expandedRow === id ? null : id);
   };
 
-  const filteredDoctors = doctors.filter(doctor =>
-    doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (doctor.speciality && doctor.speciality.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (doctor.therapy_area && doctor.therapy_area.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (doctor.emp_name && doctor.emp_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (doctor.territory && doctor.territory.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (doctor.region && doctor.region.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (doctor.division && doctor.division.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredDoctors = useMemo(() => {
+    if (!searchTerm.trim()) return doctors;
+    const s = searchTerm.toLowerCase().trim();
+    return doctors.filter(doctor =>
+      (doctor.name && doctor.name.toLowerCase().includes(s)) ||
+      (doctor.speciality && doctor.speciality.toLowerCase().includes(s)) ||
+      (doctor.therapy_area && doctor.therapy_area.toLowerCase().includes(s)) ||
+      (doctor.emp_name && doctor.emp_name.toLowerCase().includes(s)) ||
+      (doctor.territory && doctor.territory.toLowerCase().includes(s)) ||
+      (doctor.region && doctor.region.toLowerCase().includes(s)) ||
+      (doctor.division && doctor.division.toLowerCase().includes(s))
+    );
+  }, [doctors, searchTerm]);
 
-  const priorityDoctors = filteredDoctors.filter(d => d.is_priority_doctor);
-  const regularDoctors = filteredDoctors.filter(d => !d.is_priority_doctor);
+  const priorityDoctors = useMemo(() => filteredDoctors.filter(d => d.is_priority_doctor), [filteredDoctors]);
+  const regularDoctors = useMemo(() => filteredDoctors.filter(d => !d.is_priority_doctor), [filteredDoctors]);
 
   const val = (v) => v || <span className="null-val">—</span>;
 
@@ -62,7 +66,7 @@ const DoctorManagement = () => {
         </thead>
         <tbody>
           {doctorList.map((doctor) => (
-            <>
+            <React.Fragment key={doctor.id}>
               <tr
                 key={doctor.id}
                 className={`doctor-row ${isPriority ? 'priority-row' : ''} ${expandedRow === doctor.id ? 'expanded' : ''}`}
@@ -171,7 +175,7 @@ const DoctorManagement = () => {
                   </td>
                 </tr>
               )}
-            </>
+            </React.Fragment>
           ))}
         </tbody>
       </table>

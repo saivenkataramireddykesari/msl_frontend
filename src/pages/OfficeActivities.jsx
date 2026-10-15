@@ -177,15 +177,51 @@ const OfficeActivities = () => {
     return `${year}-${month}-${day}`;
   };
 
-  const formatDate = (ds) =>
-    new Date(ds).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-
-  const getMonthName = (ds) => MONTHS[new Date(ds).getMonth()];
-
-  const getMonthYear = (ds) => {
+  const parseDateParts = (ds) => {
+    if (!ds) return { year: 0, month: 0, day: 0, monthName: '', monthYear: '' };
+    if (typeof ds === 'string' && ds.includes('-')) {
+      const parts = ds.split('T')[0].split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+      const mName = MONTHS[m - 1] || '';
+      return {
+        year: y,
+        month: m,
+        day: d,
+        monthName: mName,
+        monthYear: `${mName} ${y}`
+      };
+    }
     const d = new Date(ds);
-    return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    const mName = MONTHS[d.getMonth()] || '';
+    return {
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      day: d.getDate(),
+      monthName: mName,
+      monthYear: `${mName} ${d.getFullYear()}`
+    };
   };
+
+  const formatDate = (ds) => {
+    if (!ds) return '';
+    const { year, month, day } = parseDateParts(ds);
+    if (!year) return '';
+    const monthShort = MONTHS[month - 1] ? MONTHS[month - 1].slice(0, 3) : '';
+    const dayStr = String(day).padStart(2, '0');
+    return `${dayStr} ${monthShort} ${year}`;
+  };
+
+  const getWeekdayName = (ds, format = 'short') => {
+    const { year, month, day } = parseDateParts(ds);
+    if (!year) return '';
+    return new Date(year, month - 1, day).toLocaleDateString('en-US', { weekday: format });
+  };
+
+  const getMonthName = (ds) => parseDateParts(ds).monthName;
+
+  const getMonthYear = (ds) => parseDateParts(ds).monthYear;
 
   // Group activities by month for summary view
   const getMonthlySummary = () => {
@@ -196,42 +232,97 @@ const OfficeActivities = () => {
 
     filteredActivities.forEach(a => {
       const monthKey = getMonthYear(a.activity_date);
+      if (!monthKey) return;
       if (!monthGroups[monthKey]) {
         monthGroups[monthKey] = {
           month: monthKey,
-          activities: [],
-          totalHours: 0,
-          totalDoctors: 0,
-          officeCount: 0,
-          fieldCount: 0,
-          bothCount: 0
+          activities: []
         };
       }
       monthGroups[monthKey].activities.push(a);
-      monthGroups[monthKey].totalHours += (a.hours_worked || 0);
-      monthGroups[monthKey].totalDoctors += (a.doctors_visited || 0);
-
-      const wt = (a.work_type || '').toLowerCase();
-      if (wt === 'worked at office' || wt === 'office') monthGroups[monthKey].officeCount++;
-      else if (wt === 'call supported' || wt === 'field') monthGroups[monthKey].fieldCount++;
-      else if (wt === 'both done') monthGroups[monthKey].bothCount++;
     });
-    return Object.values(monthGroups).sort((a, b) => {
-      // Sort by date descending
-      const dateA = new Date(a.activities[0].activity_date);
-      const dateB = new Date(b.activities[0].activity_date);
-      return dateB - dateA;
+
+    const result = Object.values(monthGroups).map(group => {
+      const groupActivities = group.activities;
+
+      // Group activities by distinct calendar date (YYYY-MM-DD)
+      const daysMap = {};
+      groupActivities.forEach(a => {
+        const dateKey = typeof a.activity_date === 'string'
+          ? a.activity_date.split('T')[0]
+          : new Date(a.activity_date).toISOString().split('T')[0];
+
+        if (!daysMap[dateKey]) {
+          daysMap[dateKey] = {
+            dateKey,
+            totalHours: 0,
+            doctorsVisited: 0,
+            hasOfficeActivity: false,
+            activities: []
+          };
+        }
+        daysMap[dateKey].activities.push(a);
+        daysMap[dateKey].totalHours += (Number(a.hours_worked) || 0);
+        if (a.id > 0 && a.activity_category !== 'Call Supported') {
+          daysMap[dateKey].hasOfficeActivity = true;
+        }
+        if ((a.doctors_visited || 0) > daysMap[dateKey].doctorsVisited) {
+          daysMap[dateKey].doctorsVisited = a.doctors_visited;
+        }
+      });
+
+      const distinctDays = Object.values(daysMap);
+      const totalDays = distinctDays.length;
+
+      let totalHours = 0;
+      let totalDoctors = 0;
+      let officeCount = 0;
+      let fieldCount = 0;
+      let bothCount = 0;
+
+      distinctDays.forEach(day => {
+        totalHours += day.totalHours;
+        totalDoctors += day.doctorsVisited;
+
+        const hasOffice = day.totalHours > 0 || day.hasOfficeActivity;
+        const hasField = day.doctorsVisited > 0;
+
+        if (hasOffice && hasField) {
+          bothCount++;
+        } else if (hasOffice) {
+          officeCount++;
+        } else if (hasField) {
+          fieldCount++;
+        }
+      });
+
+      return {
+        month: group.month,
+        activities: groupActivities,
+        totalDays,
+        totalHours,
+        totalDoctors,
+        officeCount,
+        fieldCount,
+        bothCount
+      };
+    });
+
+    return result.sort((a, b) => {
+      const dateA = a.activities[0]?.activity_date || '';
+      const dateB = b.activities[0]?.activity_date || '';
+      return String(dateB).localeCompare(String(dateA));
     });
   };
 
   const isOffice = (a) => {
     const wt = (a.work_type || '').toLowerCase();
-    return wt === 'worked at office' || wt === 'both done' || wt === 'office';
+    return wt === 'worked at office' || wt === 'both done' || wt === 'office' || (Number(a.hours_worked) > 0) || (a.id > 0 && a.activity_category !== 'Call Supported');
   };
 
   const isField = (a) => {
     const wt = (a.work_type || '').toLowerCase();
-    return wt === 'call supported' || wt === 'both done' || wt === 'field';
+    return wt === 'call supported' || wt === 'both done' || wt === 'field' || (Number(a.doctors_visited) > 0);
   };
 
   // Work type is now auto-calculated by backend based on hours and auto-counted doctor visits
@@ -292,8 +383,8 @@ const OfficeActivities = () => {
 
       const monthlyInteractions = allUserInteractions.filter(int => {
         if (!int.visit_date) return false;
-        const d = new Date(int.visit_date);
-        return MONTHS[d.getMonth()] === monthName && d.getFullYear() === year;
+        const { monthName: mName, year: y } = parseDateParts(int.visit_date);
+        return mName === monthName && y === year;
       });
 
       return monthlyInteractions;
@@ -351,14 +442,10 @@ const OfficeActivities = () => {
   const prepareMonthlyReport = async (monthYear) => {
     const { monthName, year } = parseReportMonth(monthYear);
 
-    // Filter activities for selected month/year
+    // Filter activities for selected month/year using parseDateParts
     const monthlyActivities = activities.filter(activity => {
-      const date = new Date(activity.activity_date);
-
-      return (
-        MONTHS[date.getMonth()] === monthName &&
-        date.getFullYear() === year
-      );
+      const { monthName: mName, year: y } = parseDateParts(activity.activity_date);
+      return mName === monthName && y === year;
     });
 
     // Fetch doctor interactions for the selected month
@@ -369,27 +456,72 @@ const OfficeActivities = () => {
       throw new Error(`No activity or doctor visit data found for ${monthYear}.`);
     }
 
-    // Calculate summary
-    const totalHours = monthlyActivities.reduce(
-      (total, activity) =>
-        total + (Number(activity.hours_worked) || 0),
-      0
-    );
+    // Aggregate monthlyActivities by distinct calendar date (YYYY-MM-DD)
+    const daysMap = {};
+    monthlyActivities.forEach(a => {
+      const dateKey = typeof a.activity_date === 'string'
+        ? a.activity_date.split('T')[0]
+        : new Date(a.activity_date).toISOString().split('T')[0];
+
+      if (!daysMap[dateKey]) {
+        daysMap[dateKey] = {
+          dateKey,
+          totalHours: 0,
+          doctorsVisited: 0,
+          hasOfficeActivity: false,
+          activities: []
+        };
+      }
+      daysMap[dateKey].activities.push(a);
+      daysMap[dateKey].totalHours += (Number(a.hours_worked) || 0);
+      if (a.id > 0 && a.activity_category !== 'Call Supported') {
+        daysMap[dateKey].hasOfficeActivity = true;
+      }
+      if ((a.doctors_visited || 0) > daysMap[dateKey].doctorsVisited) {
+        daysMap[dateKey].doctorsVisited = a.doctors_visited;
+      }
+    });
+
+    // Also include any doctor interaction dates that may not be in monthlyActivities
+    doctorInteractions.forEach(int => {
+      if (!int.visit_date) return;
+      const dateKey = typeof int.visit_date === 'string'
+        ? int.visit_date.split('T')[0]
+        : new Date(int.visit_date).toISOString().split('T')[0];
+      if (!daysMap[dateKey]) {
+        daysMap[dateKey] = {
+          dateKey,
+          totalHours: 0,
+          doctorsVisited: 1,
+          hasOfficeActivity: false,
+          activities: []
+        };
+      }
+    });
+
+    const distinctDays = Object.values(daysMap);
+    const totalDays = distinctDays.length;
+
+    let totalHours = 0;
+    let officeDays = 0;
+    let fieldDays = 0;
+    let bothDays = 0;
+
+    distinctDays.forEach(day => {
+      totalHours += day.totalHours;
+      const hasOffice = day.totalHours > 0 || day.hasOfficeActivity;
+      const hasField = day.doctorsVisited > 0;
+
+      if (hasOffice && hasField) {
+        bothDays++;
+      } else if (hasOffice) {
+        officeDays++;
+      } else if (hasField) {
+        fieldDays++;
+      }
+    });
 
     const totalDoctors = doctorInteractions.length;
-
-    const officeDays = monthlyActivities.filter(
-      activity => isOffice(activity)
-    ).length;
-
-    const fieldDays = monthlyActivities.filter(
-      activity => isField(activity)
-    ).length;
-
-    const bothDays = monthlyActivities.filter(activity => {
-      const wt = (activity.work_type || '').toLowerCase();
-      return wt === 'both done';
-    }).length;
 
     return {
       monthYear,
@@ -398,7 +530,7 @@ const OfficeActivities = () => {
       monthlyActivities,
       doctorInteractions,
       summary: {
-        totalDays: monthlyActivities.length,
+        totalDays,
         totalHours,
         totalDoctors,
         officeDays,
@@ -472,10 +604,7 @@ const OfficeActivities = () => {
             ? formatDate(activity.activity_date)
             : '',
           'Day': activity.activity_date
-            ? new Date(activity.activity_date)
-              .toLocaleDateString('en-US', {
-                weekday: 'long'
-              })
+            ? getWeekdayName(activity.activity_date, 'long')
             : '',
           'MSL': activity.msl_username || selectedUser,
           'Category': activity.activity_category || '',
@@ -971,7 +1100,7 @@ const OfficeActivities = () => {
                     <tr key={monthData.month}>
                       <td style={{ color: '#aaa', fontSize: '12px', textAlign: 'center' }}>{idx + 1}</td>
                       <td style={{ fontWeight: '600', color: '#667eea', whiteSpace: 'nowrap' }}>{monthData.month}</td>
-                      <td style={{ textAlign: 'center', fontWeight: '600' }}>{monthData.activities.length}</td>
+                      <td style={{ textAlign: 'center', fontWeight: '600' }}>{monthData.totalDays}</td>
                       <td style={{ textAlign: 'center', fontWeight: '600' }}>{monthData.totalHours.toFixed(1)}</td>
                       <td style={{ textAlign: 'center', fontWeight: '600' }}>{monthData.totalDoctors}</td>
                       <td style={{ textAlign: 'center' }}>
@@ -1131,7 +1260,7 @@ const OfficeActivities = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '2px solid #e0e3ff', paddingBottom: '14px' }}>
               <div>
                 <h2 style={{ margin: 0, color: '#333' }}> {reportMonth} — Detailed Report</h2>
-                <span style={{ fontSize: '13px', color: '#888' }}>User: <strong>{selectedUser}</strong> &nbsp;|&nbsp; {modalActivities.length} activit{modalActivities.length === 1 ? 'y' : 'ies'}</span>
+                <span style={{ fontSize: '13px', color: '#888' }}>User: <strong>{selectedUser}</strong> &nbsp;|&nbsp; {new Set(modalActivities.map(a => a.activity_date ? (typeof a.activity_date === 'string' ? a.activity_date.split('T')[0] : a.activity_date) : null).filter(Boolean)).size} days logged ({modalActivities.length} activit{modalActivities.length === 1 ? 'y' : 'ies'})</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
@@ -1168,8 +1297,7 @@ const OfficeActivities = () => {
                   </thead>
                   <tbody>
                     {modalActivities.map((a, idx) => {
-                      const d = new Date(a.activity_date);
-                      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+                      const dayName = getWeekdayName(a.activity_date, 'short');
                       return (
                         <tr
                           key={a.id}
@@ -1196,7 +1324,7 @@ const OfficeActivities = () => {
                             {isField(a) ? <span className="status-badge yes" style={{ background: '#fef3c7', color: '#92400e' }}>✓ Yes</span> : <span className="status-badge no">—</span>}
                           </td>
                           <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600' }}>
-                            {a.hours_worked !== null && a.hours_worked !== undefined ? a.hours_worked : '—'}
+                            {a.hours_worked !== null && a.hours_worked !== undefined && Number(a.hours_worked) > 0 ? a.hours_worked : '—'}
                           </td>
                           <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600' }}>
                             {a.doctors_visited !== null && a.doctors_visited !== undefined ? a.doctors_visited : '—'}
