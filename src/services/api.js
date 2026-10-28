@@ -98,6 +98,10 @@ export const requestService = {
       queryParams.append("requested_by", params.requested_by);
     if (params.role) queryParams.append("role", params.role);
     if (params.username) queryParams.append("username", params.username);
+    if (params.division) queryParams.append("division", params.division);
+    if (params.region) queryParams.append("region", params.region);
+    if (params.territory) queryParams.append("territory", params.territory);
+    if (params.search) queryParams.append("search", params.search);
 
     return api.get(`/requests?${queryParams.toString()}`);
   },

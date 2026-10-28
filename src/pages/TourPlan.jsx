@@ -8,10 +8,34 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const YEARS = ['2026', '2025', '2024'];
+const currentYear = new Date().getFullYear();
+const FILTER_YEARS = [
+  String(currentYear + 2),
+  String(currentYear + 1),
+  String(currentYear),
+  String(currentYear - 1),
+  String(currentYear - 2),
+];
+
+const CREATE_PLAN_YEARS = [
+  String(currentYear),
+  String(currentYear + 1),
+  String(currentYear + 2),
+  String(currentYear + 3),
+  String(currentYear + 4),
+];
+
+const getTodayDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const TourPlan = () => {
   const { user } = useAuth();
+  const todayDate = useMemo(() => getTodayDateString(), []);
   const canCreate = ['Asst General Manager', 'Admin', 'admin', 'Associate Vice President'].includes(user?.role);
 
   // Tour Plans List State
@@ -45,12 +69,25 @@ const TourPlan = () => {
 
   // Assigned SO and Remarks
   const [assignedSoId, setAssignedSoId] = useState('');
+  const [assignedSoEmail, setAssignedSoEmail] = useState('');
   const [remarks, setRemarks] = useState('');
+
+  const handleSoChange = (e) => {
+    const id = e.target.value;
+    setAssignedSoId(id);
+    const found = meta.scientific_officers.find((so) => String(so.id) === String(id));
+    if (found && found.email) {
+      setAssignedSoEmail(found.email);
+    } else {
+      setAssignedSoEmail('');
+    }
+  };
   
   // Form submission state
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [successReport, setSuccessReport] = useState(null);
+  const [selectedEmailPlan, setSelectedEmailPlan] = useState(null);
 
   // Expanded territory cards
   const [expandedCards, setExpandedCards] = useState({});
@@ -136,6 +173,59 @@ const TourPlan = () => {
         setPlanMonth(MONTH_NAMES[d.getMonth()]);
         setPlanYear(String(d.getFullYear()));
       }
+      if (toDate && toDate < val) {
+        setToDate('');
+      }
+    }
+  };
+
+  // Month options for plan creation (only current and future months for current year)
+  const availablePlanMonths = useMemo(() => {
+    const now = new Date();
+    const currYear = now.getFullYear();
+    const currMonthIdx = now.getMonth();
+    const selectedYearNum = Number(planYear);
+
+    if (selectedYearNum === currYear) {
+      return MONTH_NAMES.filter((_, idx) => idx >= currMonthIdx);
+    } else if (selectedYearNum > currYear) {
+      return MONTH_NAMES;
+    } else {
+      return [MONTH_NAMES[currMonthIdx]];
+    }
+  }, [planYear]);
+
+  // Handlers for month and year changes in creation form
+  const handlePlanYearChange = (e) => {
+    const selectedYear = e.target.value;
+    setPlanYear(selectedYear);
+    const now = new Date();
+    const currYear = now.getFullYear();
+    const currMonthIdx = now.getMonth();
+    if (Number(selectedYear) === currYear) {
+      const selectedMonthIdx = MONTH_NAMES.indexOf(planMonth);
+      if (selectedMonthIdx !== -1 && selectedMonthIdx < currMonthIdx) {
+        setPlanMonth(MONTH_NAMES[currMonthIdx]);
+      }
+    }
+    if (fromDate) {
+      const d = new Date(fromDate);
+      if (!isNaN(d.getTime()) && String(d.getFullYear()) !== selectedYear) {
+        setFromDate('');
+        setToDate('');
+      }
+    }
+  };
+
+  const handlePlanMonthChange = (e) => {
+    const newMonth = e.target.value;
+    setPlanMonth(newMonth);
+    if (fromDate) {
+      const d = new Date(fromDate);
+      if (!isNaN(d.getTime()) && MONTH_NAMES[d.getMonth()] !== newMonth) {
+        setFromDate('');
+        setToDate('');
+      }
     }
   };
 
@@ -178,8 +268,26 @@ const TourPlan = () => {
       setFormError('Please select both From Date and To Date.');
       return;
     }
+    const todayStr = getTodayDateString();
+    if (fromDate < todayStr) {
+      setFormError('From Date cannot be in the past. Please select today or a future date.');
+      return;
+    }
     if (fromDate > toDate) {
       setFormError('From Date cannot be later than To Date.');
+      return;
+    }
+    const now = new Date();
+    const currYear = now.getFullYear();
+    const currMonthIdx = now.getMonth();
+    const selectedYearNum = Number(planYear);
+    const selectedMonthIdx = MONTH_NAMES.indexOf(planMonth);
+
+    if (
+      selectedYearNum < currYear ||
+      (selectedYearNum === currYear && selectedMonthIdx < currMonthIdx)
+    ) {
+      setFormError('Month and Year cannot be in the past. Please select the current or a future month and year.');
       return;
     }
     if (selectedDivisions.length === 0) {
@@ -192,6 +300,11 @@ const TourPlan = () => {
     }
     if (!assignedSoId) {
       setFormError('Please assign this plan to a Scientific Officer.');
+      return;
+    }
+
+    if (!assignedSoEmail || !assignedSoEmail.trim()) {
+      setFormError('Please enter an email address for the assigned Scientific Officer to receive tour notifications.');
       return;
     }
 
@@ -209,6 +322,7 @@ const TourPlan = () => {
       assigned_so: selectedSO?.name || 'Assigned SO',
       assigned_so_id: selectedSO?.id || null,
       assigned_so_code: selectedSO?.employee_code || null,
+      assigned_so_email: assignedSoEmail.trim(),
       created_by: user?.username || 'Asst General Manager',
       created_by_emp_code: user?.employee_id || user?.Emp_Code || '',
       created_by_role: user?.role || 'Asst General Manager',
@@ -227,9 +341,12 @@ const TourPlan = () => {
       // Reset form fields
       setFromDate('');
       setToDate('');
+      setPlanMonth(MONTH_NAMES[new Date().getMonth()]);
+      setPlanYear(String(new Date().getFullYear()));
       setSelectedDivisions([]);
       setSelectedTerritories([]);
       setAssignedSoId('');
+      setAssignedSoEmail('');
       setRemarks('');
       // Refresh list
       fetchTourPlans();
@@ -308,7 +425,7 @@ const TourPlan = () => {
   };
 
   const getStatusBadge = (fromDateStr, toDateStr) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayDate;
     if (today < fromDateStr) {
       return <span className="tp-status-badge scheduled">Scheduled</span>;
     } else if (today >= fromDateStr && today <= toDateStr) {
@@ -316,6 +433,157 @@ const TourPlan = () => {
     } else {
       return <span className="tp-status-badge completed">Completed</span>;
     }
+  };
+
+  const renderEmailDeliveryDetails = (emailData, planData) => {
+    if (!emailData) {
+      return (
+        <div className="tp-email-dispatch-section">
+          <div className="tp-email-dispatch-header">
+            <div className="tp-email-header-title">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+              <h4>Email Dispatch Status</h4>
+            </div>
+            <span className="tp-status-pill not-sent">No email logs found</span>
+          </div>
+        </div>
+      );
+    }
+
+    const so = emailData.scientific_officer;
+    const blList = emailData.business_leaders || [];
+
+    const soSent = so?.status === 'sent';
+    const soFailed = so?.status === 'failed';
+    const soSkipped = !soSent && !soFailed;
+
+    const blSentCount = blList.filter((b) => b.status === 'sent').length;
+    const blFailedCount = blList.filter((b) => b.status === 'failed').length;
+    const blSkippedCount = blList.filter((b) => b.status !== 'sent' && b.status !== 'failed').length;
+
+    const totalRecipients = (so ? 1 : 0) + blList.length;
+    const totalSent = (soSent ? 1 : 0) + blSentCount;
+    const totalFailed = (soFailed ? 1 : 0) + blFailedCount;
+    const totalSkipped = (soSkipped ? 1 : 0) + blSkippedCount;
+
+    const isAllSent = totalSent > 0 && totalFailed === 0 && totalSkipped === 0;
+    const isNoneSent = totalSent === 0;
+
+    return (
+      <div className="tp-email-dispatch-section">
+        <div className="tp-email-dispatch-header">
+          <div className="tp-email-header-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+            <h4>Email Notification Dispatch</h4>
+          </div>
+          <div className="tp-email-header-badge">
+            {isAllSent ? (
+              <span className="tp-status-pill success">
+                ✓ All {totalSent} Emails Sent
+              </span>
+            ) : isNoneSent ? (
+              <span className="tp-status-pill not-sent">
+                ✕ 0 Sent ({totalSkipped} Skipped{totalFailed > 0 ? `, ${totalFailed} Failed` : ''})
+              </span>
+            ) : (
+              <span className="tp-status-pill warning">
+                ⚠ {totalSent} of {totalRecipients} Sent ({totalSkipped} Skipped{totalFailed > 0 ? `, ${totalFailed} Failed` : ''})
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="tp-recipients-list">
+          {/* Scientific Officer Recipient */}
+          <div className="tp-recipient-card">
+            <div className="tp-recipient-info">
+              <div className="tp-recipient-top">
+                <span className="tp-recipient-role-tag so">Scientific Officer</span>
+                <span className="tp-recipient-name">
+                  {so?.name || planData?.assigned_so || 'Scientific Officer'}
+                </span>
+              </div>
+              <div className="tp-recipient-email">
+                {so?.email ? (
+                  <span>✉ {so.email}</span>
+                ) : (
+                  <span className="tp-no-email">No registered email address</span>
+                )}
+              </div>
+            </div>
+            <div className="tp-recipient-status">
+              {so?.status === 'sent' ? (
+                <span className="tp-status-pill success" title="Notification delivered to SO">
+                  ✓ Email Sent{so.simulated ? ' (Simulated)' : ''}
+                </span>
+              ) : so?.status === 'failed' ? (
+                <span className="tp-status-pill error" title={so.error || 'Failed to send email'}>
+                  ✕ Failed
+                </span>
+              ) : (
+                <span className="tp-status-pill skipped" title={so?.reason || 'No email address registered'}>
+                  ⚠ Not Sent (No Email)
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Business Leaders Recipients */}
+          <div className="tp-bl-recipients-section">
+            <div className="tp-bl-section-title">
+              Business Leaders of Covered Divisions ({blList.length})
+            </div>
+
+            {blList.length === 0 ? (
+              <div className="tp-no-bl-msg">
+                No Business Leaders found for the selected division(s){planData?.divisions ? ` (${(planData.divisions || []).join(', ')})` : ''}.
+              </div>
+            ) : (
+              blList.map((bl, idx) => (
+                <div key={idx} className="tp-recipient-card">
+                  <div className="tp-recipient-info">
+                    <div className="tp-recipient-top">
+                      <span className="tp-recipient-role-tag bl">
+                        {bl.division ? `BL • ${bl.division}` : 'Business Leader'}
+                      </span>
+                      <span className="tp-recipient-name">{bl.name}</span>
+                    </div>
+                    <div className="tp-recipient-email">
+                      {bl.email ? (
+                        <span>✉ {bl.email}</span>
+                      ) : (
+                        <span className="tp-no-email">No registered email address</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="tp-recipient-status">
+                    {bl.status === 'sent' ? (
+                      <span className="tp-status-pill success" title="Notification delivered to Business Leader">
+                        ✓ Email Sent{bl.simulated ? ' (Simulated)' : ''}
+                      </span>
+                    ) : bl.status === 'failed' ? (
+                      <span className="tp-status-pill error" title={bl.error || 'Failed to send email'}>
+                        ✕ Failed
+                      </span>
+                    ) : (
+                      <span className="tp-status-pill skipped" title={bl.reason || 'No email address registered'}>
+                        ⚠ Not Sent (No Email)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -350,6 +618,10 @@ const TourPlan = () => {
               onClick={() => {
                 setSuccessReport(null);
                 setFormError('');
+                setFromDate('');
+                setToDate('');
+                setPlanMonth(MONTH_NAMES[new Date().getMonth()]);
+                setPlanYear(String(new Date().getFullYear()));
                 setShowCreateModal(true);
               }}
             >
@@ -469,7 +741,7 @@ const TourPlan = () => {
               className="tp-select"
             >
               <option value="">All Years</option>
-              {YEARS.map((y) => (
+              {FILTER_YEARS.map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>
@@ -524,7 +796,15 @@ const TourPlan = () => {
           {canCreate && !searchTerm && !filterMonth && (
             <button
               className="tp-btn-primary"
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                setSuccessReport(null);
+                setFormError('');
+                setFromDate('');
+                setToDate('');
+                setPlanMonth(MONTH_NAMES[new Date().getMonth()]);
+                setPlanYear(String(new Date().getFullYear()));
+                setShowCreateModal(true);
+              }}
             >
               + Create Tour Plan
             </button>
@@ -643,6 +923,30 @@ const TourPlan = () => {
                       <p className="tp-remarks-text">{plan.remarks}</p>
                     </div>
                   )}
+
+                  {/* Email Dispatch Info if available */}
+                  {plan.email_status && (
+                    <div className="tp-card-email-info">
+                      <div className="tp-card-email-label">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                          <polyline points="22,6 12,13 2,6" />
+                        </svg>
+                        <span>
+                          {plan.email_status.stats
+                            ? `${plan.email_status.stats.total_sent} of ${plan.email_status.stats.total_recipients} emails sent`
+                            : 'Email notifications processed'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="tp-card-email-details-link"
+                        onClick={() => setSelectedEmailPlan(plan)}
+                      >
+                        Email Details &rarr;
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Card Footer */}
@@ -691,10 +995,7 @@ const TourPlan = () => {
             {/* Success Report View */}
             {successReport ? (() => {
               const planData = successReport.plan || successReport;
-              const emailData = successReport.emails_triggered || successReport.notifications || {};
-              const soEmailInfo = emailData.scientific_officer;
-              const blList = emailData.business_leaders || [];
-              const blSentCount = blList.filter(b => b.status === 'sent').length;
+              const emailData = successReport.emails_triggered || successReport.notifications || planData.email_status || {};
 
               return (
                 <div className="tp-success-report">
@@ -712,7 +1013,7 @@ const TourPlan = () => {
                     <div className="tp-report-row">
                       <span className="tp-report-key">Assigned Scientific Officer:</span>
                       <span className="tp-report-val">
-                        {planData.assigned_so} {soEmailInfo?.email ? `(${soEmailInfo.email})` : ''}
+                        {planData.assigned_so}
                       </span>
                     </div>
                     <div className="tp-report-row">
@@ -733,13 +1034,10 @@ const TourPlan = () => {
                         {(planData.territories || []).length} Territories
                       </span>
                     </div>
-                    <div className="tp-report-row highlight">
-                      <span className="tp-report-key">Email Notifications:</span>
-                      <span className="tp-report-val">
-                        {soEmailInfo?.status === 'sent' ? '✓ Dispatched to SO' : 'Dispatched to SO'} &bull; {blSentCount > 0 ? `✓ Dispatched to ${blSentCount} BL(s)` : `${blList.length} Division BL(s) processed`}
-                      </span>
-                    </div>
                   </div>
+
+                  {/* Comprehensive Email Notification Breakdown */}
+                  {renderEmailDeliveryDetails(emailData, planData)}
 
                   <div className="tp-report-actions">
                     <button
@@ -755,6 +1053,11 @@ const TourPlan = () => {
                       className="tp-btn-secondary"
                       onClick={() => {
                         setSuccessReport(null);
+                        setFromDate('');
+                        setToDate('');
+                        setPlanMonth(MONTH_NAMES[new Date().getMonth()]);
+                        setPlanYear(String(new Date().getFullYear()));
+                        setAssignedSoEmail('');
                       }}
                     >
                       Create Another Tour Plan
@@ -782,6 +1085,7 @@ const TourPlan = () => {
                     <input
                       type="date"
                       value={fromDate}
+                      min={todayDate}
                       onChange={handleFromDateChange}
                       required
                       className="tp-input"
@@ -794,7 +1098,7 @@ const TourPlan = () => {
                       type="date"
                       value={toDate}
                       onChange={(e) => setToDate(e.target.value)}
-                      min={fromDate || undefined}
+                      min={fromDate || todayDate}
                       required
                       className="tp-input"
                     />
@@ -806,10 +1110,10 @@ const TourPlan = () => {
                     <label className="tp-label required">Month</label>
                     <select
                       value={planMonth}
-                      onChange={(e) => setPlanMonth(e.target.value)}
+                      onChange={handlePlanMonthChange}
                       className="tp-input"
                     >
-                      {MONTH_NAMES.map((m) => (
+                      {availablePlanMonths.map((m) => (
                         <option key={m} value={m}>
                           {m}
                         </option>
@@ -821,10 +1125,10 @@ const TourPlan = () => {
                     <label className="tp-label required">Year</label>
                     <select
                       value={planYear}
-                      onChange={(e) => setPlanYear(e.target.value)}
+                      onChange={handlePlanYearChange}
                       className="tp-input"
                     >
-                      {YEARS.map((y) => (
+                      {CREATE_PLAN_YEARS.map((y) => (
                         <option key={y} value={y}>
                           {y}
                         </option>
@@ -981,17 +1285,38 @@ const TourPlan = () => {
                   <label className="tp-label required">Assign to Scientific Officer</label>
                   <select
                     value={assignedSoId}
-                    onChange={(e) => setAssignedSoId(e.target.value)}
+                    onChange={handleSoChange}
                     required
                     className="tp-input"
                   >
                     <option value="">-- Choose Scientific Officer --</option>
                     {meta.scientific_officers.map((so) => (
                       <option key={so.id} value={so.id}>
-                        {so.name} {so.employee_code ? `(${so.employee_code})` : ''} - {so.email || 'No Email'}
+                        {so.name} {so.employee_code ? `(${so.employee_code})` : ''} {so.email ? `(${so.email})` : '(No Email Registered)'}
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Scientific Officer Email */}
+                <div className="tp-form-group">
+                  <div className="tp-label-with-badge">
+                    <label className="tp-label required">Scientific Officer Email</label>
+                    <span className="tp-label-subtext">Required for tour plan dispatch</span>
+                  </div>
+                  <input
+                    type="email"
+                    value={assignedSoEmail}
+                    onChange={(e) => setAssignedSoEmail(e.target.value)}
+                    placeholder="Enter email address (e.g. name@pulsepharma.net or gmail)"
+                    required
+                    className="tp-input"
+                  />
+                  {assignedSoId && !assignedSoEmail && (
+                    <p className="tp-field-hint warning">
+                      ⚠ This Scientific Officer has no registered email. Enter an email address above to dispatch the notification and save it.
+                    </p>
+                  )}
                 </div>
 
                 {/* Remarks */}
@@ -1038,6 +1363,49 @@ const TourPlan = () => {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* EMAIL NOTIFICATIONS MODAL (For reviewing email dispatch breakdown anytime) */}
+      {selectedEmailPlan && (
+        <div className="tp-modal-overlay">
+          <div className="tp-modal-dialog">
+            <div className="tp-modal-header">
+              <div className="tp-modal-title-group">
+                <span className="tp-modal-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
+                  </svg>
+                </span>
+                <div>
+                  <h2 className="tp-modal-title">Email Notification Details</h2>
+                  <p className="tp-modal-subtitle">
+                    Tour Plan: {selectedEmailPlan.from_date} &rarr; {selectedEmailPlan.to_date} ({selectedEmailPlan.month} {selectedEmailPlan.year})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="tp-modal-close"
+                onClick={() => setSelectedEmailPlan(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="tp-modal-body-scroll">
+              {renderEmailDeliveryDetails(selectedEmailPlan.email_status, selectedEmailPlan)}
+            </div>
+            <div className="tp-modal-footer">
+              <button
+                type="button"
+                className="tp-btn-primary"
+                onClick={() => setSelectedEmailPlan(null)}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

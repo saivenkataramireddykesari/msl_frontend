@@ -386,6 +386,19 @@
   white-space: nowrap;
 }
 
+.badge-division {
+  display: inline-block;
+  padding: 3px 8px;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
 .dot {
   width: 6px;
   height: 6px;

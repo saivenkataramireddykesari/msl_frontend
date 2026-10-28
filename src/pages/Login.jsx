@@ -64,8 +64,10 @@ const Login = () => {
            username: data.username,
            role: data.role,
            employee_id: data.employee_id,
-           bl_territory: data.bl_territory,
-           bl_region: data.bl_region,
+           territory: data.territory || data.bl_territory,
+           region: data.region || data.bl_region,
+           bl_territory: data.bl_territory || data.territory,
+           bl_region: data.bl_region || data.region,
            division: data.division
          });
 

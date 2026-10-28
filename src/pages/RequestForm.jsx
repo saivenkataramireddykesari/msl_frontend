@@ -459,7 +459,7 @@ const RequestForm = () => {
     setDoctorSearchTerm(term);
     
     // For BL users: show suggestions from minimum 2 characters when no patch is pre-selected
-    const isBL = user?.role === 'BL';
+    const isBL = user?.role === 'BL' || user?.role === 'BH';
     if (isBL && !formData.patch && term.length >= 2) {
       fetchDoctors(term);
     } else if (!isBL || formData.patch) {
@@ -486,7 +486,7 @@ const RequestForm = () => {
   // Fetch doctors dynamically from API
   const fetchDoctors = async (term) => {
     try {
-      const isBL = user?.role === 'BL';
+      const isBL = user?.role === 'BL' || user?.role === 'BH';
 
       // For BL users: search by name even without patch; require at least 1 char unless showing patch-based list
       if (!isBL && !formData.patch) {
@@ -536,7 +536,7 @@ const RequestForm = () => {
     setShowBrandError(false);
     setError('');
 
-    const isBL = user?.role === 'BL';
+    const isBL = user?.role === 'BL' || user?.role === 'BH';
 
     setFormData(prev => {
       const updatedForm = {
@@ -610,7 +610,7 @@ const RequestForm = () => {
   // For BL users: patch is optional, so we only clear doctor if a non-BL user has no patch.
   useEffect(() => {
     console.log('Patch useEffect triggered. formData.patch:', formData.patch);
-    const isBL = user?.role === 'BL';
+    const isBL = user?.role === 'BL' || user?.role === 'BH';
     if (!formData.patch && !isBL) {
       // Only clear doctor selection for non-BL users when patch is cleared
       setSuggestedDoctors([]);
@@ -669,8 +669,8 @@ const RequestForm = () => {
       return;
     }
 
-    // Territory and Patch are optional for BL users (SELECT selection)
-    if (user?.role !== 'BL') {
+    // Territory and Patch are optional for BL/BH users (SELECT selection)
+    if (user?.role !== 'BL' && user?.role !== 'BH') {
       if (!formData.territory) {
         setError('Please select a territory');
         setLoading(false);
@@ -684,7 +684,7 @@ const RequestForm = () => {
       }
     }
 
-    if ((user?.role === 'BL' || user?.role === 'BM') && formData.selectedBrands.length === 0) {
+    if ((user?.role === 'BL' || user?.role === 'BM' || user?.role === 'BH') && formData.selectedBrands.length === 0) {
       setError('Please select at least one brand.');
       setLoading(false);
       return;
@@ -792,37 +792,37 @@ const RequestForm = () => {
 
           <div className="form-row">
             <div className="form-group">
-              <label>{user?.role === 'BL' ? 'Territory' : 'Territory *'}</label>
+              <label>{(user?.role === 'BL' || user?.role === 'BH') ? 'Territory' : 'Territory *'}</label>
               <select
                 className="form-control"
                 name="territory"
                 value={formData.territory}
                 onChange={handleChange}
                 disabled={!formData.region}
-                style={user?.role === 'BL' && formData.territory ? { backgroundColor: '#e8f5e9' } : {}}
+                style={(user?.role === 'BL' || user?.role === 'BH') && formData.territory ? { backgroundColor: '#e8f5e9' } : {}}
               >
-                <option value="">{user?.role === 'BL' ? 'SELECT' : 'Select Territory'}</option>
+                <option value="">{(user?.role === 'BL' || user?.role === 'BH') ? 'SELECT' : 'Select Territory'}</option>
                 {territories.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-              {user?.role === 'BL' && formData.territory && (
+              {(user?.role === 'BL' || user?.role === 'BH') && formData.territory && (
                 <small style={{ color: '#2e7d32', fontSize: '0.75rem' }}></small>
               )}
             </div>
 
             <div className="form-group">
-              <label>{user?.role === 'BL' ? 'Patch' : 'Patch *'}</label>
+              <label>{(user?.role === 'BL' || user?.role === 'BH') ? 'Patch' : 'Patch *'}</label>
               <select
                 className="form-control"
                 name="patch"
                 value={formData.patch}
                 onChange={handleChange}
                 disabled={!formData.territory}
-                style={user?.role === 'BL' && formData.patch ? { backgroundColor: '#e8f5e9' } : {}}
+                style={(user?.role === 'BL' || user?.role === 'BH') && formData.patch ? { backgroundColor: '#e8f5e9' } : {}}
               >
-                <option value="">{user?.role === 'BL' ? 'SELECT' : 'Select Patch'}</option>
+                <option value="">{(user?.role === 'BL' || user?.role === 'BH') ? 'SELECT' : 'Select Patch'}</option>
                 {patches.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
-              {user?.role === 'BL' && formData.patch && (
+              {(user?.role === 'BL' || user?.role === 'BH') && formData.patch && (
                 <small style={{ color: '#2e7d32', fontSize: '0.75rem' }}></small>
               )}
             </div>
@@ -841,7 +841,7 @@ const RequestForm = () => {
 
           <div className="form-group" style={{ position: 'relative' }} ref={doctorInputRef}>
             <label>Doctor *</label>
-            {user?.role === 'BL' && !formData.patch && (
+            {(user?.role === 'BL' || user?.role === 'BH') && !formData.patch && (
               <small style={{ color: '#6c757d', display: 'block', marginBottom: '4px' }}>
 
               </small>
@@ -852,8 +852,8 @@ const RequestForm = () => {
               name="doctor_search_term"
               value={selectedDoctorName || doctorSearchTerm}
               onChange={handleDoctorSearchChange}
-              placeholder={user?.role === 'BL' ? 'Search Doctor by name...' : 'Search Doctor'}
-              disabled={user?.role !== 'BL' && !formData.patch}
+              placeholder={(user?.role === 'BL' || user?.role === 'BH') ? 'Search Doctor by name...' : 'Search Doctor'}
+              disabled={user?.role !== 'BL' && user?.role !== 'BH' && !formData.patch}
               onFocus={() => {
                 setShowDoctorSuggestions(true);
                 if (!doctorSearchTerm && formData.patch) {
@@ -919,12 +919,12 @@ const RequestForm = () => {
             <input className="form-control" value={formData.therapy_area} readOnly />
           </div>
 
-          {(user?.role === 'BL' || user?.role === 'BM') && formData.doctor_id && (
+          {(user?.role === 'BL' || user?.role === 'BM' || user?.role === 'BH') && formData.doctor_id && (
             <div className="form-group" style={{ position: 'relative' }} ref={brandDropdownRef}>
               <label>Select Brands (up to 2) *</label>
 
               {availableBrands.length === 0 && showBrandError ? (
-                <div className="error-message">{ (user?.role === 'BL' || user?.role === 'BM') ? 'No brands available for your division.' : 'No brands available for the selected doctor\'s division.' }</div>
+                <div className="error-message">{ (user?.role === 'BL' || user?.role === 'BM' || user?.role === 'BH') ? 'No brands available for your division.' : 'No brands available for the selected doctor\'s division.' }</div>
               ) : (
                 <>
                   <div
@@ -1013,7 +1013,7 @@ const RequestForm = () => {
         </div>
 
         {/* ================= ENGAGEMENT DETAILS ================= */}
-        {(user?.role === 'BL' || user?.role === 'BM') && formData.selectedBrands.length > 0 && (
+        {(user?.role === 'BL' || user?.role === 'BM' || user?.role === 'BH') && formData.selectedBrands.length > 0 && (
           <div className="form-section">
             <h3>Engagement Details</h3>
 

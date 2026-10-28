@@ -145,7 +145,7 @@ const Navbar = () => {
               </Link>
             )}
 
-            {/* {canAccessTourPlan && (
+            {canAccessTourPlan && (
               <Link
                 to="/tour-plan"
                 className={`nav-link ${isActive('/tour-plan') ? 'active' : ''}`}
@@ -155,8 +155,8 @@ const Navbar = () => {
                   <circle cx="12" cy="10" r="3" />
                 </svg>
                 <span>Tour Plan</span>
-              </Link> 
-            )} */}
+              </Link>
+            )}
           </div>
 
           {/* Desktop User Info & Actions */}

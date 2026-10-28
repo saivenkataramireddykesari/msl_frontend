@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useDeferredValue } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { requestService, userService } from '../services/api';
+import { requestService, userService, hierarchyService } from '../services/api';
 import '../styles/RequestList.css';
 
 const MONTHS = [
@@ -31,6 +31,17 @@ const RequestList = () => {
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
 
+  const userDivision = (user?.division || user?.Division || '').trim();
+  const userRegion = (user?.region || user?.bl_region || user?.Region || '').trim();
+  const userTerritory = (user?.territory || user?.bl_territory || user?.Territory || '').trim();
+  const isGlobalRole = ['Admin', 'admin', 'Asst General Manager', 'Associate Vice President'].includes(user?.role);
+
+  const [accessData, setAccessData] = useState({ regions: [], territories: [] });
+
+  const [filterDivision, setFilterDivision] = useState(() => {
+    if (!isGlobalRole && userDivision) return userDivision;
+    return '';
+  });
   const [filterTerritory, setFilterTerritory] = useState('');
   const [filterRegion, setFilterRegion] = useState('');
   const [filterTherapy, setFilterTherapy] = useState('');
@@ -82,6 +93,31 @@ const RequestList = () => {
     }
   }, [user, canBulkAssign]);
 
+  // Fetch organizational hierarchy access data for user's territory/region restrictions
+  useEffect(() => {
+    if (user?.employee_id && !isGlobalRole) {
+      hierarchyService.getAccessData(user.employee_id)
+        .then((res) => {
+          if (res.data) {
+            setAccessData({
+              regions: res.data.regions || [],
+              territories: res.data.territories || []
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('Error fetching user access data:', err);
+        });
+    }
+  }, [user?.employee_id, isGlobalRole]);
+
+  // Lock or default division to user's assigned division if not admin
+  useEffect(() => {
+    if (!isGlobalRole && userDivision && !filterDivision) {
+      setFilterDivision(userDivision);
+    }
+  }, [isGlobalRole, userDivision]);
+
   const fetchMslUsers = async () => {
     try {
       const res = await userService.getMslUsers();
@@ -91,18 +127,84 @@ const RequestList = () => {
     }
   };
 
-  // Unique options for filters
-  const uniqueTerritories = useMemo(() => {
-    return [...new Set(requests.map(r => r.territory).filter(Boolean))].sort();
-  }, [requests]);
+  // Cascading Division filter options: only user's division if user belongs to one, else all
+  const uniqueDivisions = useMemo(() => {
+    if (!isGlobalRole && userDivision) {
+      return [userDivision];
+    }
+    return [...new Set(requests.map(r => r.division).filter(Boolean))].sort();
+  }, [requests, isGlobalRole, userDivision]);
 
+  // Regions the user belongs to
+  const userBelongingRegions = useMemo(() => {
+    if (isGlobalRole) return null;
+    if (accessData.regions && accessData.regions.length > 0) {
+      return accessData.regions;
+    }
+    if (userRegion) {
+      return [userRegion];
+    }
+    return null;
+  }, [isGlobalRole, accessData.regions, userRegion]);
+
+  // Unique options for Region filter: restricted to user's regions (and division if selected)
   const uniqueRegions = useMemo(() => {
-    return [...new Set(requests.map(r => r.region).filter(Boolean))].sort();
-  }, [requests]);
+    if (userBelongingRegions && userBelongingRegions.length > 0) {
+      return [...userBelongingRegions].sort();
+    }
+    let source = requests;
+    if (filterDivision) {
+      source = source.filter(r => r.division === filterDivision);
+    }
+    return [...new Set(source.map(r => r.region).filter(Boolean))].sort();
+  }, [userBelongingRegions, requests, filterDivision]);
+
+  // Territories the user belongs to
+  const userBelongingTerritories = useMemo(() => {
+    if (isGlobalRole) return null;
+    if (accessData.territories && accessData.territories.length > 0) {
+      return accessData.territories.map(t => typeof t === 'string' ? { name: t, region: '' } : t);
+    }
+    if (userTerritory) {
+      return [{ name: userTerritory, region: userRegion || '' }];
+    }
+    return null;
+  }, [isGlobalRole, accessData.territories, userTerritory, userRegion]);
+
+  // Unique options for Territory filter: restricted to user's territories (and cascading by region/division)
+  const uniqueTerritories = useMemo(() => {
+    if (userBelongingTerritories && userBelongingTerritories.length > 0) {
+      let filtered = userBelongingTerritories;
+      if (filterRegion) {
+        filtered = filtered.filter(t => !t.region || t.region.toUpperCase() === filterRegion.toUpperCase());
+      }
+      return [...new Set(filtered.map(t => t.name).filter(Boolean))].sort();
+    }
+
+    let source = requests;
+    if (filterDivision) {
+      source = source.filter(r => r.division === filterDivision);
+    }
+    if (filterRegion) {
+      source = source.filter(r => r.region === filterRegion);
+    }
+    return [...new Set(source.map(r => r.territory).filter(Boolean))].sort();
+  }, [userBelongingTerritories, requests, filterDivision, filterRegion]);
 
   const uniqueTherapies = useMemo(() => {
     return [...new Set(requests.map(r => r.therapy_area).filter(Boolean))].sort();
   }, [requests]);
+
+  const handleDivisionChange = (val) => {
+    setFilterDivision(val);
+    setFilterRegion('');
+    setFilterTerritory('');
+  };
+
+  const handleRegionChange = (val) => {
+    setFilterRegion(val);
+    setFilterTerritory('');
+  };
 
   // Active filters count
   const activeFiltersCount = useMemo(() => {
@@ -111,11 +213,12 @@ const RequestList = () => {
     if (filterAssignment !== 'All') count++;
     if (filterMonth) count++;
     if (filterYear) count++;
+    if (filterDivision && (isGlobalRole || filterDivision !== userDivision)) count++;
     if (filterTerritory) count++;
     if (filterRegion) count++;
     if (filterTherapy) count++;
     return count;
-  }, [search, filterAssignment, filterMonth, filterYear, filterTerritory, filterRegion, filterTherapy]);
+  }, [search, filterAssignment, filterMonth, filterYear, filterDivision, filterTerritory, filterRegion, filterTherapy, isGlobalRole, userDivision]);
 
   // High performance memoized filtering (No extra state setter, no re-render loops)
   const filteredRequests = useMemo(() => {
@@ -150,8 +253,15 @@ const RequestList = () => {
       data = data.filter(r =>
         (r.doctor_name && r.doctor_name.toLowerCase().includes(s)) ||
         (r.requested_by && r.requested_by.toLowerCase().includes(s)) ||
-        (r.assigned_msl && r.assigned_msl.toLowerCase().includes(s))
+        (r.assigned_msl && r.assigned_msl.toLowerCase().includes(s)) ||
+        (r.division && r.division.toLowerCase().includes(s)) ||
+        (r.territory && r.territory.toLowerCase().includes(s)) ||
+        (r.region && r.region.toLowerCase().includes(s))
       );
+    }
+
+    if (filterDivision) {
+      data = data.filter(r => r.division === filterDivision);
     }
 
     if (filterTerritory) {
@@ -167,12 +277,12 @@ const RequestList = () => {
     }
 
     return data;
-  }, [requests, filterAssignment, filterMonth, filterYear, deferredSearch, filterTerritory, filterRegion, filterTherapy]);
+  }, [requests, filterAssignment, filterMonth, filterYear, deferredSearch, filterDivision, filterTerritory, filterRegion, filterTherapy]);
 
   // Reset to page 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearch, filterAssignment, filterMonth, filterYear, filterTerritory, filterRegion, filterTherapy]);
+  }, [deferredSearch, filterAssignment, filterMonth, filterYear, filterDivision, filterTerritory, filterRegion, filterTherapy]);
 
   // Paginated records for rendering (Massively reduces DOM size from 570+ to 25)
   const totalPages = pageSize > 0 ? Math.ceil(filteredRequests.length / pageSize) || 1 : 1;
@@ -203,6 +313,7 @@ const RequestList = () => {
     setFilterAssignment('All');
     setFilterMonth('');
     setFilterYear('');
+    setFilterDivision(!isGlobalRole && userDivision ? userDivision : '');
     setFilterTerritory('');
     setFilterRegion('');
     setFilterTherapy('');
@@ -454,14 +565,15 @@ const RequestList = () => {
           </div>
 
           <div className="filter-field">
-            <label>Territory</label>
+            <label>Division</label>
             <select
-              value={filterTerritory}
-              onChange={(e) => setFilterTerritory(e.target.value)}
+              value={filterDivision}
+              onChange={(e) => handleDivisionChange(e.target.value)}
+              disabled={!isGlobalRole && !!userDivision && uniqueDivisions.length <= 1}
             >
-              <option value="">All Territories</option>
-              {uniqueTerritories.map(t => (
-                <option key={`terr-${t}`} value={t}>{t}</option>
+              {(isGlobalRole || !userDivision) && <option value="">All Divisions</option>}
+              {uniqueDivisions.map(d => (
+                <option key={`div-${d}`} value={d}>{d}</option>
               ))}
             </select>
           </div>
@@ -470,11 +582,24 @@ const RequestList = () => {
             <label>Region</label>
             <select
               value={filterRegion}
-              onChange={(e) => setFilterRegion(e.target.value)}
+              onChange={(e) => handleRegionChange(e.target.value)}
             >
               <option value="">All Regions</option>
               {uniqueRegions.map(r => (
                 <option key={`reg-${r}`} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-field">
+            <label>Territory</label>
+            <select
+              value={filterTerritory}
+              onChange={(e) => setFilterTerritory(e.target.value)}
+            >
+              <option value="">All Territories</option>
+              {uniqueTerritories.map(t => (
+                <option key={`terr-${t}`} value={t}>{t}</option>
               ))}
             </select>
           </div>
@@ -616,7 +741,7 @@ const RequestList = () => {
                           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                           <circle cx="12" cy="10" r="3"></circle>
                         </svg>
-                        <span>{[request.territory, request.region].filter(Boolean).join(' • ') || '—'}</span>
+                        <span>{[request.division, request.territory, request.region].filter(Boolean).join(' • ') || '—'}</span>
                       </div>
                     </div>
 
@@ -741,6 +866,7 @@ const RequestList = () => {
                         </th>
                       )}
                       <th>ID</th>
+                      <th>Division</th>
                       <th>Region</th>
                       <th>Territory</th>
                       <th>Doctor</th>
@@ -770,6 +896,7 @@ const RequestList = () => {
                           </td>
                         )}
                         <td className="id-cell">#{request.id}</td>
+                        <td><span className="badge-division">{request.division || '—'}</span></td>
                         <td>{request.region || '—'}</td>
                         <td>{request.territory || '—'}</td>
                         <td className="doctor-cell">

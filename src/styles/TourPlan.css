@@ -1001,6 +1001,236 @@
 }
 
 /* =========================================================
+   EMAIL DISPATCH REPORT & RECIPIENTS BREAKDOWN
+   ========================================================= */
+
+.tp-email-dispatch-section {
+  width: 100%;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  box-sizing: border-box;
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.tp-email-dispatch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tp-email-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0f172a;
+}
+
+.tp-email-header-title h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.tp-email-header-title svg {
+  color: #4f46e5;
+}
+
+.tp-recipients-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tp-recipient-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 11px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  gap: 12px;
+}
+
+.tp-recipient-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.tp-recipient-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tp-recipient-role-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tp-recipient-role-tag.so {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
+
+.tp-recipient-role-tag.bl {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #dbeafe;
+}
+
+.tp-recipient-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1e293b;
+  word-break: break-word;
+}
+
+.tp-recipient-email {
+  font-size: 12.5px;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  word-break: break-all;
+}
+
+.tp-recipient-email.tp-no-email {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.tp-recipient-status {
+  flex-shrink: 0;
+}
+
+.tp-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tp-status-pill.success {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.tp-status-pill.error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.tp-status-pill.skipped,
+.tp-status-pill.warning {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.tp-status-pill.not-sent {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.tp-bl-recipients-section {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tp-bl-section-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+.tp-no-bl-msg {
+  background: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+/* Card Email Status Line */
+.tp-card-email-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 12px;
+}
+
+.tp-card-email-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.tp-card-email-label svg {
+  color: #6366f1;
+}
+
+.tp-card-email-details-link {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.tp-card-email-details-link:hover {
+  background: #eef2ff;
+  text-decoration: underline;
+}
+
+.tp-modal-body-scroll {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+/* =========================================================
    MOBILE RESPONSIVENESS
    ========================================================= */
 
@@ -1080,4 +1310,28 @@
   .tp-report-actions button {
     width: 100%;
   }
+}
+
+.tp-label-with-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.tp-label-subtext {
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.tp-field-hint.warning {
+  margin: 6px 0 0 0;
+  font-size: 12px;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 6px 10px;
+  line-height: 1.4;
 }
