@@ -327,6 +327,7 @@ export const tourPlanService = {
     if (params.year) queryParams.append("year", params.year);
     return api.get(`/tour-plans?${queryParams.toString()}`);
   },
+  getTourPlanDetail: (id) => api.get(`/tour-plans/${id}`),
   deleteTourPlan: (id, role = null) => {
     const params = new URLSearchParams();
     if (role) params.append("current_user_role", role);

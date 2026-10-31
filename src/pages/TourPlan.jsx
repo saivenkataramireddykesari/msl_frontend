@@ -48,6 +48,9 @@ const TourPlan = () => {
   const [filterYear, setFilterYear] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // View Mode: 'list' (default table/list view) or 'cards'
+  const [viewMode, setViewMode] = useState('list');
+
   // Form Drawer / Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [meta, setMeta] = useState({ divisions: [], scientific_officers: [] });
@@ -89,8 +92,33 @@ const TourPlan = () => {
   const [successReport, setSuccessReport] = useState(null);
   const [selectedEmailPlan, setSelectedEmailPlan] = useState(null);
 
+  // Detailed Tour Plan Modal State
+  const [selectedDetailPlan, setSelectedDetailPlan] = useState(null);
+  const [detailData, setDetailData] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const [detailDocSearch, setDetailDocSearch] = useState('');
+
   // Expanded territory cards
   const [expandedCards, setExpandedCards] = useState({});
+
+  // Handler to open Detailed View
+  const handleOpenDetail = async (plan) => {
+    setSelectedDetailPlan(plan);
+    setDetailData(null);
+    setDetailDocSearch('');
+    setDetailError('');
+    try {
+      setLoadingDetail(true);
+      const res = await tourPlanService.getTourPlanDetail(plan.id);
+      setDetailData(res.data);
+    } catch (err) {
+      console.error('Error fetching tour plan detail:', err);
+      setDetailError(err?.response?.data?.detail || 'Failed to load tour plan details. Showing available summary.');
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
 
   // Fetch tour plans
   const fetchTourPlans = async () => {
@@ -761,6 +789,39 @@ const TourPlan = () => {
               Reset Filters
             </button>
           )}
+
+          <div className="tp-view-toggle">
+            <button
+              type="button"
+              className={`tp-view-btn ${viewMode === 'list' ? 'active' : ''}`}
+              onClick={() => setViewMode('list')}
+              title="Table / List View"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+              <span>List View</span>
+            </button>
+            <button
+              type="button"
+              className={`tp-view-btn ${viewMode === 'cards' ? 'active' : ''}`}
+              onClick={() => setViewMode('cards')}
+              title="Card Grid View"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+              <span>Cards</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -810,6 +871,212 @@ const TourPlan = () => {
             </button>
           )}
         </div>
+      ) : viewMode === 'list' ? (
+        <div className="tp-table-card">
+          <div className="tp-table-responsive">
+            <table className="tp-list-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '170px' }}>Dates (From &rarr; To)</th>
+                  <th style={{ width: '190px' }}>Scientific Officer (SO)</th>
+                  <th style={{ width: '170px' }}>Divisions</th>
+                  <th>Territories</th>
+                  <th style={{ width: '140px', textAlign: 'center' }}>Assigned Doctors</th>
+                  <th style={{ width: '110px', textAlign: 'center' }}>Status</th>
+                  <th style={{ width: '110px', textAlign: 'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTourPlans.map((plan) => {
+                  const isExpanded = !!expandedCards[plan.id];
+                  const displayedTerritories = isExpanded
+                    ? plan.territories || []
+                    : (plan.territories || []).slice(0, 4);
+                  const remainingCount = (plan.territories || []).length - 4;
+
+                  return (
+                    <tr
+                      key={plan.id}
+                      className="tp-table-row clickable-row"
+                      onClick={() => handleOpenDetail(plan)}
+                      title="Click to view full tour plan details and assigned doctor visits"
+                    >
+                      {/* Dates Column */}
+                      <td className="tp-td-date">
+                        <div className="tp-table-date-badge">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                          </svg>
+                          <span>{plan.from_date}</span>
+                        </div>
+                        <div className="tp-date-arrow">&darr; to</div>
+                        <div className="tp-table-date-badge to-badge">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                          </svg>
+                          <span>{plan.to_date}</span>
+                        </div>
+                        <div className="tp-table-month-sub">
+                          {plan.month} {plan.year}
+                        </div>
+                      </td>
+
+                      {/* Scientific Officer Column */}
+                      <td className="tp-td-so">
+                        <div className="tp-table-so-wrap">
+                          <div className="tp-table-so-avatar">
+                            {plan.assigned_so ? plan.assigned_so.charAt(0).toUpperCase() : 'S'}
+                          </div>
+                          <div className="tp-table-so-details">
+                            <span className="tp-table-so-name" title={plan.assigned_so}>
+                              {plan.assigned_so}
+                            </span>
+                            {plan.assigned_so_code && (
+                              <span className="tp-table-so-code">Emp Code: {plan.assigned_so_code}</span>
+                            )}
+                            {plan.assigned_so_email && (
+                              <span className="tp-table-so-email" title={plan.assigned_so_email}>
+                                {plan.assigned_so_email}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Division Column */}
+                      <td className="tp-td-divisions">
+                        <div className="tp-table-divisions-wrap">
+                          {(plan.divisions || []).map((div) => {
+                            const divCount = plan.division_doctor_counts?.[div.toUpperCase()] || 0;
+                            return (
+                              <div key={div} className="tp-table-div-pill">
+                                <span className="tp-div-name">{div}</span>
+                                {divCount > 0 && (
+                                  <span className="tp-div-doc-badge" title={`${divCount} assigned doctor requests in date range`}>
+                                    {divCount} docs
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </td>
+
+                      {/* Territory Column */}
+                      <td className="tp-td-territories">
+                        <div className="tp-table-territories-wrap">
+                          {displayedTerritories.map((terr) => {
+                            const terrCount = plan.territory_doctor_counts?.[terr.toUpperCase()] || 0;
+                            return (
+                              <span key={terr} className="tp-table-terr-pill">
+                                <span className="tp-terr-name">{terr}</span>
+                                {terrCount > 0 && (
+                                  <span className="tp-terr-doc-badge" title={`${terrCount} assigned doctor requests in ${terr}`}>
+                                    {terrCount}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })}
+                          {!isExpanded && remainingCount > 0 && (
+                            <button
+                              type="button"
+                              className="tp-table-more-btn"
+                              onClick={() => toggleExpandCard(plan.id)}
+                            >
+                              +{remainingCount} more
+                            </button>
+                          )}
+                          {isExpanded && (plan.territories || []).length > 4 && (
+                            <button
+                              type="button"
+                              className="tp-table-more-btn collapse"
+                              onClick={() => toggleExpandCard(plan.id)}
+                            >
+                              Show less
+                            </button>
+                          )}
+                        </div>
+                        {plan.remarks && (
+                          <div className="tp-table-remarks-row" title={plan.remarks}>
+                            <span className="tp-remarks-tag">Notes:</span> {plan.remarks}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Doctor Count Column */}
+                      <td className="tp-td-doc-count" style={{ textAlign: 'center' }}>
+                        <div className="tp-doc-count-card">
+                          <span className="tp-doc-count-num">
+                            {plan.assigned_doctors_count !== undefined ? plan.assigned_doctors_count : 0}
+                          </span>
+                          <span className="tp-doc-count-label">Assigned</span>
+                          {plan.total_doctors_count > 0 && (
+                            <span className="tp-doc-master-sub" title="Total Doctors listed in Master DB for these Divisions & Territories">
+                              of {plan.total_doctors_count} in Master
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Status Column */}
+                      <td className="tp-td-status" style={{ textAlign: 'center' }}>
+                        {getStatusBadge(plan.from_date, plan.to_date)}
+                      </td>
+
+                      {/* Actions Column */}
+                      <td className="tp-td-actions" style={{ textAlign: 'center' }}>
+                        <div className="tp-table-actions-wrap" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="tp-table-btn-icon view-btn"
+                            onClick={() => handleOpenDetail(plan)}
+                            title="View Tour Plan Details"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          </button>
+                          {plan.email_status && (
+                            <button
+                              type="button"
+                              className="tp-table-btn-icon email-btn"
+                              onClick={() => setSelectedEmailPlan(plan)}
+                              title="View Email Dispatch Details"
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                                <polyline points="22,6 12,13 2,6" />
+                              </svg>
+                            </button>
+                          )}
+                          {canCreate && (
+                            <button
+                              type="button"
+                              className="tp-table-btn-icon del-btn"
+                              onClick={() => handleDeletePlan(plan.id)}
+                              title="Delete Tour Plan"
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : (
         <div className="tp-cards-grid">
           {filteredTourPlans.map((plan) => {
@@ -820,7 +1087,12 @@ const TourPlan = () => {
             const remainingCount = (plan.territories || []).length - 6;
 
             return (
-              <div key={plan.id} className="tp-card">
+              <div
+                key={plan.id}
+                className="tp-card clickable-card"
+                onClick={() => handleOpenDetail(plan)}
+                title="Click to view full tour plan details and assigned doctor visits"
+              >
                 <div className="tp-card-header">
                   <div className="tp-card-date-badge">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -832,7 +1104,7 @@ const TourPlan = () => {
                       {plan.from_date} &rarr; {plan.to_date}
                     </span>
                   </div>
-                  <div className="tp-card-header-actions">
+                  <div className="tp-card-header-actions" onClick={(e) => e.stopPropagation()}>
                     {getStatusBadge(plan.from_date, plan.to_date)}
                     {canCreate && (
                       <button
@@ -854,6 +1126,11 @@ const TourPlan = () => {
                     <span className="tp-month-text">
                       {plan.month} {plan.year}
                     </span>
+                    {plan.assigned_doctors_count !== undefined && (
+                      <span className="tp-card-doc-badge" title="Assigned Doctors in date range for these divisions/territories">
+                        {plan.assigned_doctors_count} Doctors Assigned
+                      </span>
+                    )}
                   </div>
 
                   {/* Assigned Scientific Officer */}
@@ -876,11 +1153,15 @@ const TourPlan = () => {
                       Divisions ({(plan.divisions || []).length}):
                     </span>
                     <div className="tp-chips-wrap">
-                      {(plan.divisions || []).map((div) => (
-                        <span key={div} className="tp-division-chip">
-                          {div}
-                        </span>
-                      ))}
+                      {(plan.divisions || []).map((div) => {
+                        const divCount = plan.division_doctor_counts?.[div.toUpperCase()] || 0;
+                        return (
+                          <span key={div} className="tp-division-chip">
+                            {div}
+                            {divCount > 0 && <span className="tp-chip-cnt"> ({divCount} docs)</span>}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -890,11 +1171,15 @@ const TourPlan = () => {
                       Territories ({(plan.territories || []).length}):
                     </span>
                     <div className="tp-chips-wrap">
-                      {displayedTerritories.map((terr) => (
-                        <span key={terr} className="tp-territory-chip">
-                          {terr}
-                        </span>
-                      ))}
+                      {displayedTerritories.map((terr) => {
+                        const terrCount = plan.territory_doctor_counts?.[terr.toUpperCase()] || 0;
+                        return (
+                          <span key={terr} className="tp-territory-chip">
+                            {terr}
+                            {terrCount > 0 && <span className="tp-chip-cnt"> ({terrCount})</span>}
+                          </span>
+                        );
+                      })}
                       {!isExpanded && remainingCount > 0 && (
                         <button
                           type="button"
@@ -1363,6 +1648,321 @@ const TourPlan = () => {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* TOUR PLAN DETAILED VIEW MODAL */}
+      {selectedDetailPlan && (
+        <div className="tp-modal-overlay" onClick={() => setSelectedDetailPlan(null)}>
+          <div className="tp-modal-dialog tp-detail-modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="tp-modal-header">
+              <div className="tp-modal-title-group">
+                <span className="tp-modal-icon detail-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </span>
+                <div>
+                  <h2 className="tp-modal-title">Tour Plan Detailed Overview</h2>
+                  <p className="tp-modal-subtitle">
+                    {selectedDetailPlan.from_date} &rarr; {selectedDetailPlan.to_date} &bull; {selectedDetailPlan.month} {selectedDetailPlan.year}
+                  </p>
+                </div>
+              </div>
+              <div className="tp-modal-header-right">
+                {getStatusBadge(selectedDetailPlan.from_date, selectedDetailPlan.to_date)}
+                <button
+                  type="button"
+                  className="tp-modal-close"
+                  onClick={() => setSelectedDetailPlan(null)}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="tp-modal-body-scroll tp-detail-modal-body">
+              {loadingDetail ? (
+                <div className="tp-loading-state" style={{ padding: '40px 0' }}>
+                  <div className="tp-spinner"></div>
+                  <p>Loading tour plan details and assigned doctor visits...</p>
+                </div>
+              ) : (
+                <>
+                  {detailError && (
+                    <div className="tp-form-alert error" style={{ marginBottom: '16px' }}>
+                      {detailError}
+                    </div>
+                  )}
+
+                  {/* Top Stats Banner */}
+                  <div className="tp-detail-stats-grid">
+                    <div className="tp-detail-stat-box">
+                      <span className="tp-stat-sub">Assigned SO</span>
+                      <span className="tp-stat-main">{selectedDetailPlan.assigned_so}</span>
+                      {selectedDetailPlan.assigned_so_code && (
+                        <span className="tp-stat-hint">Code: {selectedDetailPlan.assigned_so_code}</span>
+                      )}
+                    </div>
+                    <div className="tp-detail-stat-box">
+                      <span className="tp-stat-sub">Date Range</span>
+                      <span className="tp-stat-main">{selectedDetailPlan.from_date} &rarr; {selectedDetailPlan.to_date}</span>
+                      <span className="tp-stat-hint">{selectedDetailPlan.month} {selectedDetailPlan.year}</span>
+                    </div>
+                    <div className="tp-detail-stat-box highlight-green">
+                      <span className="tp-stat-sub">Assigned Doctor Visits</span>
+                      <span className="tp-stat-main">
+                        {detailData ? detailData.assigned_doctors_count : (selectedDetailPlan.assigned_doctors_count || 0)}
+                      </span>
+                      <span className="tp-stat-hint">
+                        {detailData?.total_doctors_count
+                          ? `out of ${detailData.total_doctors_count} in Master`
+                          : selectedDetailPlan.total_doctors_count
+                          ? `out of ${selectedDetailPlan.total_doctors_count} in Master`
+                          : 'In selected territories'}
+                      </span>
+                    </div>
+                    <div className="tp-detail-stat-box">
+                      <span className="tp-stat-sub">Coverage</span>
+                      <span className="tp-stat-main">
+                        {(selectedDetailPlan.divisions || []).length} Div / {(selectedDetailPlan.territories || []).length} Terr
+                      </span>
+                      <span className="tp-stat-hint">
+                        By {selectedDetailPlan.created_by || 'AGM'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Divisions & Territories Section */}
+                  <div className="tp-detail-section">
+                    <div className="tp-detail-section-title">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                        <line x1="8" y1="2" x2="8" y2="18"></line>
+                        <line x1="16" y1="6" x2="16" y2="22"></line>
+                      </svg>
+                      <span>Assigned Divisions & Territories</span>
+                    </div>
+
+                    <div className="tp-detail-chips-container">
+                      <div className="tp-detail-chips-group">
+                        <span className="tp-detail-group-label">Divisions:</span>
+                        <div className="tp-chips-wrap">
+                          {(selectedDetailPlan.divisions || []).map((div) => {
+                            const cnt = selectedDetailPlan.division_doctor_counts?.[div.toUpperCase()] || 0;
+                            return (
+                              <span key={div} className="tp-division-chip">
+                                <strong>{div}</strong>
+                                {cnt > 0 && <span className="tp-chip-cnt"> ({cnt} docs)</span>}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="tp-detail-chips-group">
+                        <span className="tp-detail-group-label">Territories:</span>
+                        <div className="tp-chips-wrap">
+                          {(selectedDetailPlan.territories || []).map((terr) => {
+                            const cnt = selectedDetailPlan.territory_doctor_counts?.[terr.toUpperCase()] || 0;
+                            return (
+                              <span key={terr} className="tp-territory-chip">
+                                {terr}
+                                {cnt > 0 && <span className="tp-chip-cnt"> ({cnt})</span>}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notes / Objectives if present */}
+                  {selectedDetailPlan.remarks && (
+                    <div className="tp-detail-section">
+                      <div className="tp-detail-section-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                          <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <span>Notes & Objectives</span>
+                      </div>
+                      <div className="tp-detail-notes-box">
+                        <p>{selectedDetailPlan.remarks}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Assigned Doctor Requests Table */}
+                  <div className="tp-detail-section">
+                    <div className="tp-detail-section-header">
+                      <div className="tp-detail-section-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="9" cy="7" r="4"></circle>
+                          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span>
+                          Assigned Doctors for these Dates & Territory ({detailData?.assigned_requests?.length || 0})
+                        </span>
+                      </div>
+
+                      {detailData?.assigned_requests && detailData.assigned_requests.length > 0 && (
+                        <div className="tp-detail-search">
+                          <input
+                            type="text"
+                            placeholder="Filter doctors, specialty, brand..."
+                            value={detailDocSearch}
+                            onChange={(e) => setDetailDocSearch(e.target.value)}
+                            className="tp-detail-search-input"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {!detailData || detailData.assigned_requests?.length === 0 ? (
+                      <div className="tp-detail-empty-box">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="12" y1="8" x2="12" y2="12"></line>
+                          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <h4>No Doctor Requests Scheduled Yet</h4>
+                        <p>
+                          No doctor visit requests have been logged between <strong>{selectedDetailPlan.from_date}</strong> and{' '}
+                          <strong>{selectedDetailPlan.to_date}</strong> for the assigned territories (
+                          {(selectedDetailPlan.territories || []).slice(0, 3).join(', ')}
+                          {(selectedDetailPlan.territories || []).length > 3 ? '...' : ''}).
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="tp-detail-doc-table-wrap">
+                        <table className="tp-detail-doc-table">
+                          <thead>
+                            <tr>
+                              <th>Date</th>
+                              <th>Doctor Name</th>
+                              <th>Speciality</th>
+                              <th>Territory / Patch</th>
+                              <th>Brand & Objective</th>
+                              <th>Requested By</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {detailData.assigned_requests
+                              .filter((req) => {
+                                if (!detailDocSearch.trim()) return true;
+                                const term = detailDocSearch.toLowerCase();
+                                return (
+                                  (req.doctor_name || '').toLowerCase().includes(term) ||
+                                  (req.speciality || '').toLowerCase().includes(term) ||
+                                  (req.territory || '').toLowerCase().includes(term) ||
+                                  (req.brand || '').toLowerCase().includes(term) ||
+                                  (req.requested_by || '').toLowerCase().includes(term)
+                                );
+                              })
+                              .map((req) => (
+                                <tr key={req.request_id}>
+                                  <td className="doc-date-col">
+                                    <span className="doc-date-pill">{req.request_date || 'N/A'}</span>
+                                  </td>
+                                  <td>
+                                    <div className="doc-name-wrap">
+                                      <span className="doc-name-text">Dr. {req.doctor_name}</span>
+                                      {req.is_priority_doctor && (
+                                        <span className="priority-doc-tag">Priority</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <span className="doc-spec-text">{req.speciality || '-'}</span>
+                                  </td>
+                                  <td>
+                                    <div className="doc-terr-wrap">
+                                      <span className="terr-name">{req.territory}</span>
+                                      {req.patch && <span className="patch-name">Patch: {req.patch}</span>}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <div className="doc-brand-obj-wrap">
+                                      {req.brand && <span className="brand-badge">{req.brand}</span>}
+                                      {req.objective && <p className="obj-text">{req.objective}</p>}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <div className="requested-by-wrap">
+                                      <span className="req-name">{req.requested_by}</span>
+                                      <span className="req-role">({req.requested_by_role || 'BL'})</span>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <span className={`req-status-pill ${(req.request_status || 'pending').toLowerCase()}`}>
+                                      {req.request_status || 'Pending'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Email Delivery summary preview if exists */}
+                  {selectedDetailPlan.email_status && (
+                    <div className="tp-detail-section">
+                      <div className="tp-detail-email-preview">
+                        <div className="email-preview-left">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                            <polyline points="22,6 12,13 2,6" />
+                          </svg>
+                          <div>
+                            <h5>Email Notifications Dispatch</h5>
+                            <p>
+                              {selectedDetailPlan.email_status.stats
+                                ? `${selectedDetailPlan.email_status.stats.total_sent} of ${selectedDetailPlan.email_status.stats.total_recipients} recipients notified`
+                                : 'Notification logs available'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="tp-btn-secondary"
+                          onClick={() => {
+                            setSelectedEmailPlan(selectedDetailPlan);
+                          }}
+                        >
+                          View Email Dispatch Log &rarr;
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="tp-modal-footer">
+              <span className="tp-detail-footer-meta">
+                Created by <strong>{selectedDetailPlan.created_by || 'AGM'}</strong> &bull; {selectedDetailPlan.status || 'Active'}
+              </span>
+              <button
+                type="button"
+                className="tp-btn-primary"
+                onClick={() => setSelectedDetailPlan(null)}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
