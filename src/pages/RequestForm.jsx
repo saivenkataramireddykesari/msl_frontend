@@ -107,7 +107,7 @@ const RequestForm = () => {
       if (!user?.employee_id) return;
       
       // Check cache first
-      const cacheKey = `accessData_v3_${user.employee_id}`;
+      const cacheKey = `accessData_v4_${user.employee_id}`;
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
