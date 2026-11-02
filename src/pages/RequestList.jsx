@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo, useDeferredValue } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { requestService, userService, hierarchyService } from '../services/api';
+import ExcelColumnFilter from '../components/ExcelColumnFilter';
 import '../styles/RequestList.css';
 
 const MONTHS = [
@@ -23,6 +24,7 @@ const CAN_ASSIGN_ROLES = ['Asst General Manager', 'Associate Vice President', 'A
 const CAN_EDIT_DATE_ROLES = ['Asst General Manager', 'Associate Vice President', 'Admin', 'admin'];
 
 const RequestList = () => {
+  const navigate = useNavigate();
   const { user, canCreateRequest } = useAuth();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +84,74 @@ const RequestList = () => {
 
   const canBulkAssign = CAN_ASSIGN_ROLES.includes(user?.role);
   const canEditDate = CAN_EDIT_DATE_ROLES.includes(user?.role);
+
+  // Excel-like Column Filters & Sorting State
+  const [columnFilters, setColumnFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [activeFilterMenu, setActiveFilterMenu] = useState(null);
+  const formatDate = (dateString) => {
+    if (!dateString) return '—';
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const TABLE_COLUMNS = useMemo(() => [
+    { key: 'id', title: 'ID', getValue: (r) => r.id, dataType: 'number', width: '80px' },
+    { key: 'division', title: 'Division', getValue: (r) => r.division || '', dataType: 'text' },
+    { key: 'region', title: 'Region', getValue: (r) => r.region || '', dataType: 'text' },
+    { key: 'territory', title: 'Territory', getValue: (r) => r.territory || '', dataType: 'text' },
+    { key: 'doctor_name', title: 'Doctor', getValue: (r) => r.doctor_name || '', dataType: 'text' },
+    { key: 'objective', title: 'Objective(s)', getValue: (r) => r.objective || '', dataType: 'text' },
+    { key: 'rx_status_brand1', title: 'RX Status (Brand 1)', getValue: (r) => r.rx_status_brand1 || '', dataType: 'text' },
+    { key: 'rx_status_brand2', title: 'RX Status (Brand 2)', getValue: (r) => r.rx_status_brand2 || '', dataType: 'text' },
+    { key: 'brand', title: 'Brand(s)', getValue: (r) => [r.brand, r.brand2].filter(Boolean).join(', '), dataType: 'text' },
+    { key: 'assigned_msl', title: 'Assigned To', getValue: (r) => r.assigned_msl || 'Unassigned', dataType: 'text' },
+    { key: 'num_visits', title: 'Visits', getValue: (r) => (r.num_visits ?? 0), dataType: 'number', align: 'center', width: '90px' },
+    { key: 'requested_by', title: 'Requested By', getValue: (r) => r.requested_by || '', dataType: 'text', popoverAlign: 'right' },
+    { key: 'request_date', title: 'Request Date', getValue: (r) => formatDate(r.request_date), dataType: 'date', popoverAlign: 'right' },
+    { key: 'created_at', title: 'Created', getValue: (r) => formatDate(r.created_at), dataType: 'date', popoverAlign: 'right' },
+  ], []);
+
+  const activeColumnFiltersCount = useMemo(() => {
+    return Object.values(columnFilters).filter(v => v instanceof Set && v.size > 0).length;
+  }, [columnFilters]);
+
+  const handleApplyColumnFilter = (columnKey, valSet) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [columnKey]: valSet
+    }));
+  };
+
+  const handleClearColumnFilter = (columnKey) => {
+    setColumnFilters(prev => {
+      const next = { ...prev };
+      delete next[columnKey];
+      return next;
+    });
+  };
+
+  const handleClearAllColumnFilters = () => {
+    setColumnFilters({});
+  };
+
+  const handleSortColumn = (columnKey, direction) => {
+    setSortConfig({ key: columnKey, direction });
+  };
+
+  const handleHeaderClick = (columnKey) => {
+    setSortConfig(prev => {
+      if (prev.key === columnKey) {
+        if (prev.direction === 'asc') return { key: columnKey, direction: 'desc' };
+        return { key: null, direction: 'asc' };
+      }
+      return { key: columnKey, direction: 'asc' };
+    });
+  };
+
 
   useEffect(() => {
     fetchRequests();
@@ -206,7 +276,7 @@ const RequestList = () => {
     setFilterTerritory('');
   };
 
-  // Active filters count
+  // Active filters count (including Excel column filters)
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (search.trim()) count++;
@@ -217,11 +287,12 @@ const RequestList = () => {
     if (filterTerritory) count++;
     if (filterRegion) count++;
     if (filterTherapy) count++;
+    count += activeColumnFiltersCount;
     return count;
-  }, [search, filterAssignment, filterMonth, filterYear, filterDivision, filterTerritory, filterRegion, filterTherapy, isGlobalRole, userDivision]);
+  }, [search, filterAssignment, filterMonth, filterYear, filterDivision, filterTerritory, filterRegion, filterTherapy, isGlobalRole, userDivision, activeColumnFiltersCount]);
 
-  // High performance memoized filtering (No extra state setter, no re-render loops)
-  const filteredRequests = useMemo(() => {
+  // Stage 1: Base filtering by top-level controls (search, assignment, division, region, territory, therapy, month, year)
+  const filteredBeforeExcel = useMemo(() => {
     let data = requests;
 
     if (filterAssignment === 'Assigned') {
@@ -279,10 +350,62 @@ const RequestList = () => {
     return data;
   }, [requests, filterAssignment, filterMonth, filterYear, deferredSearch, filterDivision, filterTerritory, filterRegion, filterTherapy]);
 
+  // Stage 2: Apply Excel column filters and sorting
+  const filteredRequests = useMemo(() => {
+    let data = filteredBeforeExcel;
+
+    // Apply active Excel column filters
+    const activeFilters = Object.entries(columnFilters).filter(([_, set]) => set instanceof Set);
+    if (activeFilters.length > 0) {
+      data = data.filter(item => {
+        for (const [colKey, allowedSet] of activeFilters) {
+          const col = TABLE_COLUMNS.find(c => c.key === colKey);
+          let rawVal = col?.getValue ? col.getValue(item) : item[colKey];
+          let val = rawVal === null || rawVal === undefined ? '' : String(rawVal).trim();
+          if (!val) val = '__BLANK__';
+          if (!allowedSet.has(val)) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    // Apply sorting
+    if (sortConfig.key) {
+      const col = TABLE_COLUMNS.find(c => c.key === sortConfig.key);
+      const getVal = col?.getValue || ((r) => r[sortConfig.key]);
+      const dir = sortConfig.direction === 'desc' ? -1 : 1;
+      const isNum = col?.dataType === 'number';
+      const isDate = col?.dataType === 'date';
+
+      data = [...data].sort((a, b) => {
+        const valA = getVal(a);
+        const valB = getVal(b);
+        if (valA === valB) return 0;
+        if (valA === null || valA === undefined || valA === '') return 1;
+        if (valB === null || valB === undefined || valB === '') return -1;
+        if (isNum) {
+          const numA = Number(valA);
+          const numB = Number(valB);
+          if (!isNaN(numA) && !isNaN(numB)) return (numA - numB) * dir;
+        }
+        if (isDate) {
+          const dateA = new Date(valA).getTime();
+          const dateB = new Date(valB).getTime();
+          if (!isNaN(dateA) && !isNaN(dateB)) return (dateA - dateB) * dir;
+        }
+        return String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+      });
+    }
+
+    return data;
+  }, [filteredBeforeExcel, columnFilters, sortConfig, TABLE_COLUMNS]);
+
   // Reset to page 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearch, filterAssignment, filterMonth, filterYear, filterDivision, filterTerritory, filterRegion, filterTherapy]);
+  }, [deferredSearch, filterAssignment, filterMonth, filterYear, filterDivision, filterTerritory, filterRegion, filterTherapy, columnFilters, sortConfig]);
 
   // Paginated records for rendering (Massively reduces DOM size from 570+ to 25)
   const totalPages = pageSize > 0 ? Math.ceil(filteredRequests.length / pageSize) || 1 : 1;
@@ -317,15 +440,8 @@ const RequestList = () => {
     setFilterTerritory('');
     setFilterRegion('');
     setFilterTherapy('');
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '—';
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    setColumnFilters({});
+    setSortConfig({ key: null, direction: 'asc' });
   };
 
   const handleSelectAll = (e) => {
@@ -343,6 +459,14 @@ const RequestList = () => {
     setSelectedRequestIds(prev =>
       prev.includes(id) ? prev.filter(reqId => reqId !== id) : [...prev, id]
     );
+  };
+
+  const handleRowClick = (e, requestId) => {
+    // If the click originated from an interactive element (checkbox, button, link, input), let it handle its own event
+    if (e.target.closest('button, input, select, a, textarea, [data-prevent-row-click="true"]')) {
+      return;
+    }
+    navigate(`/requests/${requestId}`);
   };
 
   const handleBulkAssign = async () => {
@@ -703,17 +827,24 @@ const RequestList = () => {
               {paginatedRequests.map((request) => (
                 <div
                   key={`card-${request.id}`}
-                  className={`request-card ${selectedRequestIds.includes(request.id) ? 'card-selected' : ''}`}
+                  className={`request-card clickable-card ${selectedRequestIds.includes(request.id) ? 'card-selected' : ''}`}
+                  onClick={(e) => handleRowClick(e, request.id)}
                 >
                   <div className="card-header">
                     <div className="card-header-left">
                       {canBulkAssign && (
-                        <input
-                          type="checkbox"
-                          checked={selectedRequestIds.includes(request.id)}
-                          onChange={() => handleSelectRequest(request.id)}
-                          className="card-checkbox"
-                        />
+                        <div
+                          style={{ display: 'inline-flex', alignItems: 'center' }}
+                          onClick={(e) => e.stopPropagation()}
+                          data-prevent-row-click="true"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedRequestIds.includes(request.id)}
+                            onChange={() => handleSelectRequest(request.id)}
+                            className="card-checkbox"
+                          />
+                        </div>
                       )}
                       <span className="card-id-tag">#{request.id}</span>
                     </div>
@@ -735,7 +866,7 @@ const RequestList = () => {
 
                   <div className="card-body">
                     <div className="card-doctor-info">
-                      <h3 className="card-doctor-name">{request.doctor_name}</h3>
+                      <h3 className="card-doctor-name">{request.doctor_name || "—"}</h3>
                       <div className="card-location">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
@@ -789,7 +920,11 @@ const RequestList = () => {
                         <div className="meta-value">
                           {canEditDate ? (
                             editingDateId === request.id ? (
-                              <div className="inline-date-edit">
+                              <div
+                                className="inline-date-edit"
+                                onClick={(e) => e.stopPropagation()}
+                                data-prevent-row-click="true"
+                              >
                                 <input
                                   type="date"
                                   value={editingDateValue}
@@ -798,14 +933,18 @@ const RequestList = () => {
                                 />
                                 <button
                                   className="date-action-btn check"
-                                  onClick={() => handleSaveDate(request.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSaveDate(request.id);
+                                  }}
                                   disabled={isSavingDate}
                                 >
                                   ✓
                                 </button>
                                 <button
                                   className="date-action-btn cancel"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setEditingDateId(null);
                                     setEditingDateValue('');
                                   }}
@@ -818,7 +957,8 @@ const RequestList = () => {
                                 <span>{formatDate(request.request_date)}</span>
                                 <button
                                   className="date-edit-btn"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setEditingDateId(request.id);
                                     setEditingDateValue(request.request_date ? request.request_date.split('T')[0] : '');
                                   }}
@@ -852,6 +992,41 @@ const RequestList = () => {
             /* DESKTOP TABLE VIEW */
             <div className="table-container-card">
               <div className="table-responsive-wrapper">
+                {/* Active Column Filters Bar */}
+                {activeColumnFiltersCount > 0 && (
+                  <div className="active-column-filters-bar">
+                    <span className="active-filters-label">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                      </svg>
+                      Active Column Filters ({activeColumnFiltersCount}):
+                    </span>
+                    {Object.entries(columnFilters).map(([colKey, setVals]) => {
+                      if (!(setVals instanceof Set)) return null;
+                      const col = TABLE_COLUMNS.find(c => c.key === colKey);
+                      return (
+                        <span key={colKey} className="col-filter-pill">
+                          <span>{col?.title || colKey}: {setVals.size} selected</span>
+                          <button
+                            type="button"
+                            onClick={() => handleClearColumnFilter(colKey)}
+                            title="Remove this column filter"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="clear-all-col-filters-btn"
+                      onClick={handleClearAllColumnFilters}
+                    >
+                      Clear All Column Filters
+                    </button>
+                  </div>
+                )}
+
                 <table className="requests-table">
                   <thead>
                     <tr>
@@ -865,29 +1040,83 @@ const RequestList = () => {
                           />
                         </th>
                       )}
-                      <th>ID</th>
-                      <th>Division</th>
-                      <th>Region</th>
-                      <th>Territory</th>
-                      <th>Doctor</th>
-                      <th>Objective(s)</th>
-                      <th>RX Status (Brand 1)</th>
-                      <th>RX Status (Brand 2)</th>
-                      <th>Brand(s)</th>
-                      <th>Assigned To</th>
-                      <th style={{ textAlign: 'center' }}>Visits</th>
-                      <th>Requested By</th>
-                      <th>Request Date</th>
-                      <th>Created</th>
+                      {TABLE_COLUMNS.map((col) => {
+                        const isFiltered = columnFilters[col.key] instanceof Set;
+                        const isSorted = sortConfig.key === col.key;
+                        return (
+                          <th
+                            key={col.key}
+                            className="excel-th"
+                            style={{
+                              ...(col.width ? { width: col.width } : {}),
+                              ...(col.align ? { textAlign: col.align } : {})
+                            }}
+                          >
+                            <div className="excel-th-inner">
+                              <span
+                                className="excel-th-title"
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => handleHeaderClick(col.key)}
+                                title={`Click to sort by ${col.title}`}
+                              >
+                                <span>{col.title}</span>
+                                {isSorted && (
+                                  <span className="excel-sort-indicator">
+                                    {sortConfig.direction === 'asc' ? '▲' : '▼'}
+                                  </span>
+                                )}
+                              </span>
+
+                              <button
+                                type="button"
+                                className={`excel-filter-trigger ${isFiltered ? 'active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveFilterMenu(prev => prev === col.key ? null : col.key);
+                                }}
+                                title={`Filter by ${col.title} (Excel-like)`}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill={isFiltered ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2">
+                                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                </svg>
+                              </button>
+                            </div>
+
+                            {activeFilterMenu === col.key && (
+                              <ExcelColumnFilter
+                                columnKey={col.key}
+                                title={col.title}
+                                dataset={filteredBeforeExcel}
+                                getValue={col.getValue}
+                                filterValues={columnFilters[col.key]}
+                                onApplyFilter={(valSet) => handleApplyColumnFilter(col.key, valSet)}
+                                sortConfig={sortConfig}
+                                onSort={(dir) => handleSortColumn(col.key, dir)}
+                                dataType={col.dataType}
+                                align={col.popoverAlign || 'left'}
+                                onClose={() => setActiveFilterMenu(null)}
+                              />
+                            )}
+                          </th>
+                        );
+                      })}
                       <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {paginatedRequests.map((request) => (
-                      <tr key={request.id} className={selectedRequestIds.includes(request.id) ? 'row-selected' : ''}>
+                      <tr
+                        key={request.id}
+                        className={`clickable-row ${selectedRequestIds.includes(request.id) ? 'row-selected' : ''}`}
+                        onClick={(e) => handleRowClick(e, request.id)}
+                      >
                         {canBulkAssign && (
-                          <td style={{ textAlign: 'center' }}>
+                          <td
+                            style={{ textAlign: 'center' }}
+                            onClick={(e) => e.stopPropagation()}
+                            data-prevent-row-click="true"
+                          >
                             <input
                               type="checkbox"
                               checked={selectedRequestIds.includes(request.id)}
@@ -900,7 +1129,7 @@ const RequestList = () => {
                         <td>{request.region || '—'}</td>
                         <td>{request.territory || '—'}</td>
                         <td className="doctor-cell">
-                          <strong>{request.doctor_name}</strong>
+                          <strong>{request.doctor_name || "—"}</strong>
                         </td>
                         <td className="objective-cell">
                           {request.objective ? (
@@ -947,7 +1176,11 @@ const RequestList = () => {
                         <td className="date-cell">
                           {canEditDate ? (
                             editingDateId === request.id ? (
-                              <div className="inline-date-edit">
+                              <div
+                                className="inline-date-edit"
+                                onClick={(e) => e.stopPropagation()}
+                                data-prevent-row-click="true"
+                              >
                                 <input
                                   type="date"
                                   value={editingDateValue}
@@ -957,14 +1190,18 @@ const RequestList = () => {
                                 />
                                 <button
                                   className="date-action-btn check"
-                                  onClick={() => handleSaveDate(request.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSaveDate(request.id);
+                                  }}
                                   disabled={isSavingDate}
                                 >
                                   ✓
                                 </button>
                                 <button
                                   className="date-action-btn cancel"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setEditingDateId(null);
                                     setEditingDateValue('');
                                   }}
@@ -977,7 +1214,8 @@ const RequestList = () => {
                                 <span>{formatDate(request.request_date)}</span>
                                 <button
                                   className="date-edit-btn"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setEditingDateId(request.id);
                                     setEditingDateValue(request.request_date ? request.request_date.split('T')[0] : '');
                                   }}
