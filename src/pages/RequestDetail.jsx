@@ -555,7 +555,11 @@ const RequestDetail = () => {
         <div className="info-grid">
           <div className="info-item">
             <label>Doctor</label>
-            <span className="info-value">{request.doctor?.name}</span>
+            <span className="info-value">{request.doctor?.name || '—'}</span>
+          </div>
+          <div className="info-item">
+            <label>Division</label>
+            <span className="info-value">{request.doctor?.division || request.division || '—'}</span>
           </div>
           <div className="info-item">
             <label>Requested By</label>

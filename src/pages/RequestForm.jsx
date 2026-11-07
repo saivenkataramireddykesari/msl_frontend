@@ -541,7 +541,7 @@ const RequestForm = () => {
     setFormData(prev => {
       const updatedForm = {
         ...prev,
-        doctor_id: doctor.id,
+        doctor_id: doctor.doctor_id_ext || doctor.id,
         therapy_area: doctor.therapy_area || doctor.speciality || '',
         selectedBrands: [],
       };
@@ -707,9 +707,9 @@ const RequestForm = () => {
     }
 
     try {
-      const doctorId = parseInt(formData.doctor_id);
+      const doctorId = formData.doctor_id ? String(formData.doctor_id).trim() : '';
 
-      if (isNaN(doctorId) || doctorId <= 0) {
+      if (!doctorId) {
         setError('Invalid doctor selected');
         setLoading(false);
         return;
