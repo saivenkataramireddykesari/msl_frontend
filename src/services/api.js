@@ -1,8 +1,8 @@
 import axios from "axios";
 
-const API_URL = (import.meta.env.VITE_API_URL || "https://msl-backend-2.onrender.com").replace(/\/+$/, "");
+const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/+$/, "");
 
-// https://msl-backend-2.onrender.com   ,, http://localhost:8000
+// https://msl-backend-2.onrender.com   , http://localhost:8000
 
 const api = axios.create({
   baseURL: API_URL,
