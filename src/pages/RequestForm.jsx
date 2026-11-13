@@ -106,8 +106,8 @@ const RequestForm = () => {
     try {
       if (!user?.employee_id) return;
       
-      // Check cache first
-      const cacheKey = `accessData_v4_${user.employee_id}`;
+      // Check cache first (v5: filtered for priority doctors only)
+      const cacheKey = `accessData_v5_${user.employee_id}`;
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);

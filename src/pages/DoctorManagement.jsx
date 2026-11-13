@@ -16,7 +16,7 @@ const DoctorManagement = () => {
   const fetchDoctors = async () => {
     try {
       setLoading(true);
-      const response = await doctorService.getDoctors();
+      const response = await doctorService.getDoctors(true);
       setDoctors(response.data || []);
     } catch (error) {
       console.error('Error fetching doctors:', error);
@@ -196,7 +196,7 @@ const DoctorManagement = () => {
       <div className="page-header">
         <div>
           <h1>Doctor Management</h1>
-          <p className="page-subtitle">{doctors.length} doctors in database</p>
+          <p className="page-subtitle">{doctors.length} priority doctors in database</p>
         </div>
         <Link to="/dashboard" className="back-link">← Back to Dashboard</Link>
       </div>

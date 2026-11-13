@@ -31,7 +31,7 @@ export const brandService = {
 
 // ================= DOCTOR =================
 export const doctorService = {
-  getDoctors: (priorityOnly = false) =>
+  getDoctors: (priorityOnly = true) =>
     api.get(`/doctors?priority_only=${priorityOnly}`),
   getDoctor: (id) => api.get(`/doctors/${id}`),
   createDoctor: (data) => api.post("/doctors", data),
@@ -328,6 +328,12 @@ export const tourPlanService = {
     return api.get(`/tour-plans?${queryParams.toString()}`);
   },
   getTourPlanDetail: (id) => api.get(`/tour-plans/${id}`),
+  updateTourPlan: (id, data, role = null, username = null) => {
+    const params = new URLSearchParams();
+    if (role) params.append("current_user_role", role);
+    if (username) params.append("current_user_name", username);
+    return api.put(`/tour-plans/${id}?${params.toString()}`, data);
+  },
   deleteTourPlan: (id, role = null) => {
     const params = new URLSearchParams();
     if (role) params.append("current_user_role", role);

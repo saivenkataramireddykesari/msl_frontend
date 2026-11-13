@@ -8,23 +8,6 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const currentYear = new Date().getFullYear();
-const FILTER_YEARS = [
-  String(currentYear + 2),
-  String(currentYear + 1),
-  String(currentYear),
-  String(currentYear - 1),
-  String(currentYear - 2),
-];
-
-const CREATE_PLAN_YEARS = [
-  String(currentYear),
-  String(currentYear + 1),
-  String(currentYear + 2),
-  String(currentYear + 3),
-  String(currentYear + 4),
-];
-
 const getTodayDateString = () => {
   const d = new Date();
   const year = d.getFullYear();
@@ -43,16 +26,15 @@ const TourPlan = () => {
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState('');
 
-  // Top Filter States for Tour Plans List
-  const [filterMonth, setFilterMonth] = useState('');
-  const [filterYear, setFilterYear] = useState('');
+  // Top Search State for Tour Plans List
   const [searchTerm, setSearchTerm] = useState('');
 
   // View Mode: 'list' (default table/list view) or 'cards'
   const [viewMode, setViewMode] = useState('list');
 
   // Form Drawer / Modal State
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingPlan, setEditingPlan] = useState(null);
   const [meta, setMeta] = useState({ divisions: [], scientific_officers: [] });
   const [loadingMeta, setLoadingMeta] = useState(false);
 
@@ -130,8 +112,6 @@ const TourPlan = () => {
         username: user?.username,
         employee_id: user?.employee_id || user?.Emp_Code,
         division: user?.division || user?.Division,
-        month: filterMonth || undefined,
-        year: filterYear || undefined,
       };
       const res = await tourPlanService.getTourPlans(params);
       setTourPlans(res.data || []);
@@ -145,7 +125,7 @@ const TourPlan = () => {
 
   useEffect(() => {
     fetchTourPlans();
-  }, [filterMonth, filterYear, user]);
+  }, [user]);
 
   // Fetch metadata when create modal is opened or user is AGM/Admin
   useEffect(() => {
@@ -207,56 +187,6 @@ const TourPlan = () => {
     }
   };
 
-  // Month options for plan creation (only current and future months for current year)
-  const availablePlanMonths = useMemo(() => {
-    const now = new Date();
-    const currYear = now.getFullYear();
-    const currMonthIdx = now.getMonth();
-    const selectedYearNum = Number(planYear);
-
-    if (selectedYearNum === currYear) {
-      return MONTH_NAMES.filter((_, idx) => idx >= currMonthIdx);
-    } else if (selectedYearNum > currYear) {
-      return MONTH_NAMES;
-    } else {
-      return [MONTH_NAMES[currMonthIdx]];
-    }
-  }, [planYear]);
-
-  // Handlers for month and year changes in creation form
-  const handlePlanYearChange = (e) => {
-    const selectedYear = e.target.value;
-    setPlanYear(selectedYear);
-    const now = new Date();
-    const currYear = now.getFullYear();
-    const currMonthIdx = now.getMonth();
-    if (Number(selectedYear) === currYear) {
-      const selectedMonthIdx = MONTH_NAMES.indexOf(planMonth);
-      if (selectedMonthIdx !== -1 && selectedMonthIdx < currMonthIdx) {
-        setPlanMonth(MONTH_NAMES[currMonthIdx]);
-      }
-    }
-    if (fromDate) {
-      const d = new Date(fromDate);
-      if (!isNaN(d.getTime()) && String(d.getFullYear()) !== selectedYear) {
-        setFromDate('');
-        setToDate('');
-      }
-    }
-  };
-
-  const handlePlanMonthChange = (e) => {
-    const newMonth = e.target.value;
-    setPlanMonth(newMonth);
-    if (fromDate) {
-      const d = new Date(fromDate);
-      if (!isNaN(d.getTime()) && MONTH_NAMES[d.getMonth()] !== newMonth) {
-        setFromDate('');
-        setToDate('');
-      }
-    }
-  };
-
   // Division select handlers
   const handleToggleDivision = (div) => {
     setSelectedDivisions((prev) =>
@@ -287,8 +217,71 @@ const TourPlan = () => {
     setSelectedTerritories([]);
   };
 
-  // Create form submit
-  const handleCreateSubmit = async (e) => {
+  const handleOpenCreate = () => {
+    setEditingPlan(null);
+    setSuccessReport(null);
+    setFormError('');
+    setFromDate('');
+    setToDate('');
+    setPlanMonth(MONTH_NAMES[new Date().getMonth()]);
+    setPlanYear(String(new Date().getFullYear()));
+    setSelectedDivisions([]);
+    setSelectedTerritories([]);
+    setAssignedSoId('');
+    setAssignedSoEmail('');
+    setRemarks('');
+    setShowModal(true);
+  };
+
+  const handleOpenEdit = async (plan) => {
+    setEditingPlan(plan);
+    setSuccessReport(null);
+    setFormError('');
+    setFromDate(plan.from_date || '');
+    setToDate(plan.to_date || '');
+    if (plan.from_date) {
+      const d = new Date(plan.from_date);
+      if (!isNaN(d.getTime())) {
+        setPlanMonth(MONTH_NAMES[d.getMonth()]);
+        setPlanYear(String(d.getFullYear()));
+      }
+    } else {
+      setPlanMonth(plan.month || MONTH_NAMES[new Date().getMonth()]);
+      setPlanYear(plan.year || String(new Date().getFullYear()));
+    }
+    const divs = plan.divisions || [];
+    setSelectedDivisions(divs);
+    const terrs = plan.territories || [];
+    setSelectedTerritories(terrs);
+
+    // Match SO
+    if (plan.assigned_so_id) {
+      setAssignedSoId(String(plan.assigned_so_id));
+    } else {
+      const found = meta.scientific_officers.find(
+        (so) => so.name === plan.assigned_so || String(so.id) === String(plan.assigned_so_id)
+      );
+      setAssignedSoId(found ? String(found.id) : '');
+    }
+    setAssignedSoEmail(plan.assigned_so_email || '');
+    setRemarks(plan.remarks || '');
+    setShowModal(true);
+
+    if (divs.length > 0) {
+      try {
+        setLoadingTerritories(true);
+        const res = await tourPlanService.getTerritories(divs);
+        setAvailableTerritories(res.data || []);
+      } catch (err) {
+        console.error('Error loading territories for edit:', err);
+      } finally {
+        setLoadingTerritories(false);
+      }
+    }
+  };
+
+  // Form submit for create & update
+  const handleSaveSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
 
@@ -297,25 +290,12 @@ const TourPlan = () => {
       return;
     }
     const todayStr = getTodayDateString();
-    if (fromDate < todayStr) {
+    if (!editingPlan && fromDate < todayStr) {
       setFormError('From Date cannot be in the past. Please select today or a future date.');
       return;
     }
     if (fromDate > toDate) {
       setFormError('From Date cannot be later than To Date.');
-      return;
-    }
-    const now = new Date();
-    const currYear = now.getFullYear();
-    const currMonthIdx = now.getMonth();
-    const selectedYearNum = Number(planYear);
-    const selectedMonthIdx = MONTH_NAMES.indexOf(planMonth);
-
-    if (
-      selectedYearNum < currYear ||
-      (selectedYearNum === currYear && selectedMonthIdx < currMonthIdx)
-    ) {
-      setFormError('Month and Year cannot be in the past. Please select the current or a future month and year.');
       return;
     }
     if (selectedDivisions.length === 0) {
@@ -332,7 +312,7 @@ const TourPlan = () => {
     }
 
     if (!assignedSoEmail || !assignedSoEmail.trim()) {
-      setFormError('Please enter an email address for the assigned Scientific Officer to receive tour notifications.');
+      setFormError('Please enter an email address for the assigned Scientific Officer.');
       return;
     }
 
@@ -340,16 +320,20 @@ const TourPlan = () => {
       (so) => String(so.id) === String(assignedSoId)
     );
 
+    const derivedDate = new Date(fromDate);
+    const derivedMonth = !isNaN(derivedDate.getTime()) ? MONTH_NAMES[derivedDate.getMonth()] : planMonth;
+    const derivedYear = !isNaN(derivedDate.getTime()) ? String(derivedDate.getFullYear()) : planYear;
+
     const payload = {
-      month: planMonth,
-      year: planYear,
+      month: derivedMonth,
+      year: derivedYear,
       from_date: fromDate,
       to_date: toDate,
       divisions: selectedDivisions,
       territories: selectedTerritories,
-      assigned_so: selectedSO?.name || 'Assigned SO',
-      assigned_so_id: selectedSO?.id || null,
-      assigned_so_code: selectedSO?.employee_code || null,
+      assigned_so: selectedSO?.name || (editingPlan ? editingPlan.assigned_so : 'Assigned SO'),
+      assigned_so_id: selectedSO?.id || (editingPlan ? editingPlan.assigned_so_id : null),
+      assigned_so_code: selectedSO?.employee_code || (editingPlan ? editingPlan.assigned_so_code : null),
       assigned_so_email: assignedSoEmail.trim(),
       created_by: user?.username || 'Asst General Manager',
       created_by_emp_code: user?.employee_id || user?.Emp_Code || '',
@@ -359,29 +343,46 @@ const TourPlan = () => {
 
     try {
       setSubmitting(true);
-      const res = await tourPlanService.createTourPlan(
-        payload,
-        user?.role,
-        user?.username
-      );
+      if (editingPlan) {
+        await tourPlanService.updateTourPlan(
+          editingPlan.id,
+          payload,
+          user?.role,
+          user?.username
+        );
+        setShowModal(false);
+        setEditingPlan(null);
+        setFromDate('');
+        setToDate('');
+        setSelectedDivisions([]);
+        setSelectedTerritories([]);
+        setAssignedSoId('');
+        setAssignedSoEmail('');
+        setRemarks('');
+        fetchTourPlans();
+      } else {
+        const res = await tourPlanService.createTourPlan(
+          payload,
+          user?.role,
+          user?.username
+        );
 
-      setSuccessReport(res.data);
-      // Reset form fields
-      setFromDate('');
-      setToDate('');
-      setPlanMonth(MONTH_NAMES[new Date().getMonth()]);
-      setPlanYear(String(new Date().getFullYear()));
-      setSelectedDivisions([]);
-      setSelectedTerritories([]);
-      setAssignedSoId('');
-      setAssignedSoEmail('');
-      setRemarks('');
-      // Refresh list
-      fetchTourPlans();
+        setSuccessReport(res.data);
+        // Reset form fields
+        setFromDate('');
+        setToDate('');
+        setSelectedDivisions([]);
+        setSelectedTerritories([]);
+        setAssignedSoId('');
+        setAssignedSoEmail('');
+        setRemarks('');
+        // Refresh list
+        fetchTourPlans();
+      }
     } catch (err) {
-      console.error('Error creating tour plan:', err);
+      console.error('Error saving tour plan:', err);
       setFormError(
-        err?.response?.data?.detail || 'Failed to create tour plan. Please try again.'
+        err?.response?.data?.detail || 'Failed to save tour plan. Please try again.'
       );
     } finally {
       setSubmitting(false);
@@ -643,15 +644,7 @@ const TourPlan = () => {
           {canCreate && (
             <button
               className="tp-btn-primary create-plan-btn"
-              onClick={() => {
-                setSuccessReport(null);
-                setFormError('');
-                setFromDate('');
-                setToDate('');
-                setPlanMonth(MONTH_NAMES[new Date().getMonth()]);
-                setPlanYear(String(new Date().getFullYear()));
-                setShowCreateModal(true);
-              }}
+              onClick={handleOpenCreate}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
@@ -747,46 +740,12 @@ const TourPlan = () => {
             )}
           </div>
 
-          <div className="tp-select-wrap">
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              className="tp-select"
-            >
-              <option value="">All Months</option>
-              {MONTH_NAMES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="tp-select-wrap">
-            <select
-              value={filterYear}
-              onChange={(e) => setFilterYear(e.target.value)}
-              className="tp-select"
-            >
-              <option value="">All Years</option>
-              {FILTER_YEARS.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {(filterMonth || filterYear || searchTerm) && (
+          {searchTerm && (
             <button
               className="tp-btn-secondary reset-filter-btn"
-              onClick={() => {
-                setFilterMonth('');
-                setFilterYear('');
-                setSearchTerm('');
-              }}
+              onClick={() => setSearchTerm('')}
             >
-              Reset Filters
+              Reset Search
             </button>
           )}
 
@@ -848,24 +807,16 @@ const TourPlan = () => {
           </div>
           <h3>No Tour Plans Found</h3>
           <p>
-            {searchTerm || filterMonth || filterYear
-              ? 'No tour plans match your selected search or filter criteria.'
+            {searchTerm
+              ? 'No tour plans match your search query.'
               : canCreate
               ? 'No tour plans have been created yet. Click "Create Tour Plan" above to create the first monthly plan.'
               : 'There are no active tour plans assigned to your division or account.'}
           </p>
-          {canCreate && !searchTerm && !filterMonth && (
+          {canCreate && !searchTerm && (
             <button
               className="tp-btn-primary"
-              onClick={() => {
-                setSuccessReport(null);
-                setFormError('');
-                setFromDate('');
-                setToDate('');
-                setPlanMonth(MONTH_NAMES[new Date().getMonth()]);
-                setPlanYear(String(new Date().getFullYear()));
-                setShowCreateModal(true);
-              }}
+              onClick={handleOpenCreate}
             >
               + Create Tour Plan
             </button>
@@ -882,7 +833,6 @@ const TourPlan = () => {
                   <th style={{ width: '170px' }}>Divisions</th>
                   <th>Territories</th>
                   <th style={{ width: '140px', textAlign: 'center' }}>Assigned Doctors</th>
-                  <th style={{ width: '110px', textAlign: 'center' }}>Status</th>
                   <th style={{ width: '110px', textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
@@ -1023,11 +973,6 @@ const TourPlan = () => {
                         </div>
                       </td>
 
-                      {/* Status Column */}
-                      <td className="tp-td-status" style={{ textAlign: 'center' }}>
-                        {getStatusBadge(plan.from_date, plan.to_date)}
-                      </td>
-
                       {/* Actions Column */}
                       <td className="tp-td-actions" style={{ textAlign: 'center' }}>
                         <div className="tp-table-actions-wrap" onClick={(e) => e.stopPropagation()}>
@@ -1042,6 +987,19 @@ const TourPlan = () => {
                               <circle cx="12" cy="12" r="3" />
                             </svg>
                           </button>
+                          {canCreate && (
+                            <button
+                              type="button"
+                              className="tp-table-btn-icon edit-btn"
+                              onClick={() => handleOpenEdit(plan)}
+                              title="Edit Tour Plan"
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                          )}
                           {plan.email_status && (
                             <button
                               type="button"
@@ -1106,6 +1064,19 @@ const TourPlan = () => {
                   </div>
                   <div className="tp-card-header-actions" onClick={(e) => e.stopPropagation()}>
                     {getStatusBadge(plan.from_date, plan.to_date)}
+                    {canCreate && (
+                      <button
+                        type="button"
+                        className="tp-card-edit-btn"
+                        onClick={() => handleOpenEdit(plan)}
+                        title="Edit Tour Plan"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                    )}
                     {canCreate && (
                       <button
                         className="tp-card-del-btn"
@@ -1247,8 +1218,8 @@ const TourPlan = () => {
         </div>
       )}
 
-      {/* CREATE TOUR PLAN MODAL (For Asst General Manager / Admin) */}
-      {showCreateModal && (
+      {/* CREATE / EDIT TOUR PLAN MODAL (For Asst General Manager / Admin) */}
+      {showModal && (
         <div className="tp-modal-overlay">
           <div className="tp-modal-dialog">
             <div className="tp-modal-header">
@@ -1260,9 +1231,11 @@ const TourPlan = () => {
                   </svg>
                 </span>
                 <div>
-                  <h2 className="tp-modal-title">Create Monthly Tour Plan</h2>
+                  <h2 className="tp-modal-title">{editingPlan ? 'Edit Tour Plan' : 'Create Monthly Tour Plan'}</h2>
                   <p className="tp-modal-subtitle">
-                    Assign field coverage to Scientific Officer & send notifications to relevant BLs.
+                    {editingPlan
+                      ? 'Update tour dates, divisions, territories, assigned Scientific Officer, and objectives.'
+                      : 'Assign field coverage to Scientific Officer & send notifications to relevant BLs.'}
                   </p>
                 </div>
               </div>
@@ -1270,7 +1243,10 @@ const TourPlan = () => {
                 type="button"
                 className="tp-modal-close"
                 onClick={() => {
-                  if (!submitting) setShowCreateModal(false);
+                  if (!submitting) {
+                    setShowModal(false);
+                    setEditingPlan(null);
+                  }
                 }}
               >
                 ✕
@@ -1329,7 +1305,8 @@ const TourPlan = () => {
                       className="tp-btn-primary"
                       onClick={() => {
                         setSuccessReport(null);
-                        setShowCreateModal(false);
+                        setShowModal(false);
+                        setEditingPlan(null);
                       }}
                     >
                       Done & View Tour Plans
@@ -1338,6 +1315,7 @@ const TourPlan = () => {
                       className="tp-btn-secondary"
                       onClick={() => {
                         setSuccessReport(null);
+                        setEditingPlan(null);
                         setFromDate('');
                         setToDate('');
                         setPlanMonth(MONTH_NAMES[new Date().getMonth()]);
@@ -1351,7 +1329,7 @@ const TourPlan = () => {
                 </div>
               );
             })() : (
-              <form onSubmit={handleCreateSubmit} className="tp-modal-form">
+              <form onSubmit={handleSaveSubmit} className="tp-modal-form">
                 {formError && (
                   <div className="tp-form-alert error">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1363,14 +1341,14 @@ const TourPlan = () => {
                   </div>
                 )}
 
-                {/* Date Fields & Month */}
+                {/* Date Fields */}
                 <div className="tp-form-row two-cols">
                   <div className="tp-form-group">
                     <label className="tp-label required">From Date</label>
                     <input
                       type="date"
                       value={fromDate}
-                      min={todayDate}
+                      min={editingPlan ? undefined : todayDate}
                       onChange={handleFromDateChange}
                       required
                       className="tp-input"
@@ -1383,42 +1361,10 @@ const TourPlan = () => {
                       type="date"
                       value={toDate}
                       onChange={(e) => setToDate(e.target.value)}
-                      min={fromDate || todayDate}
+                      min={fromDate || (editingPlan ? undefined : todayDate)}
                       required
                       className="tp-input"
                     />
-                  </div>
-                </div>
-
-                <div className="tp-form-row two-cols">
-                  <div className="tp-form-group">
-                    <label className="tp-label required">Month</label>
-                    <select
-                      value={planMonth}
-                      onChange={handlePlanMonthChange}
-                      className="tp-input"
-                    >
-                      {availablePlanMonths.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="tp-form-group">
-                    <label className="tp-label required">Year</label>
-                    <select
-                      value={planYear}
-                      onChange={handlePlanYearChange}
-                      className="tp-input"
-                    >
-                      {CREATE_PLAN_YEARS.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 </div>
 
@@ -1621,7 +1567,10 @@ const TourPlan = () => {
                   <button
                     type="button"
                     className="tp-btn-secondary"
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={() => {
+                      setShowModal(false);
+                      setEditingPlan(null);
+                    }}
                     disabled={submitting}
                   >
                     Cancel
@@ -1634,14 +1583,14 @@ const TourPlan = () => {
                     {submitting ? (
                       <>
                         <span className="tp-spinner small"></span>
-                        <span>Dispatching & Sending Emails...</span>
+                        <span>{editingPlan ? 'Saving Changes...' : 'Dispatching & Sending Emails...'}</span>
                       </>
                     ) : (
                       <>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
-                        <span>Create Plan & Trigger Emails</span>
+                        <span>{editingPlan ? 'Save Changes' : 'Create Plan & Trigger Emails'}</span>
                       </>
                     )}
                   </button>
@@ -1854,7 +1803,6 @@ const TourPlan = () => {
                               <th>Territory / Patch</th>
                               <th>Brand & Objective</th>
                               <th>Requested By</th>
-                              <th>Status</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1904,11 +1852,6 @@ const TourPlan = () => {
                                       <span className="req-role">({req.requested_by_role || 'BL'})</span>
                                     </div>
                                   </td>
-                                  <td>
-                                    <span className={`req-status-pill ${(req.request_status || 'pending').toLowerCase()}`}>
-                                      {req.request_status || 'Pending'}
-                                    </span>
-                                  </td>
                                 </tr>
                               ))}
                           </tbody>
@@ -1953,15 +1896,30 @@ const TourPlan = () => {
 
             <div className="tp-modal-footer">
               <span className="tp-detail-footer-meta">
-                Created by <strong>{selectedDetailPlan.created_by || 'AGM'}</strong> &bull; {selectedDetailPlan.status || 'Active'}
+                Created by <strong>{selectedDetailPlan.created_by || 'AGM'}</strong>
               </span>
-              <button
-                type="button"
-                className="tp-btn-primary"
-                onClick={() => setSelectedDetailPlan(null)}
-              >
-                Close
-              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {canCreate && (
+                  <button
+                    type="button"
+                    className="tp-btn-secondary"
+                    onClick={() => {
+                      const planToEdit = selectedDetailPlan;
+                      setSelectedDetailPlan(null);
+                      handleOpenEdit(planToEdit);
+                    }}
+                  >
+                    Edit Tour Plan
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="tp-btn-primary"
+                  onClick={() => setSelectedDetailPlan(null)}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
