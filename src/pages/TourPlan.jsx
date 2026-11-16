@@ -16,9 +16,18 @@ const getTodayDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
+const getFirstDayOfLastMonthString = () => {
+  const d = new Date();
+  const prevMonthDate = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  const year = prevMonthDate.getFullYear();
+  const month = String(prevMonthDate.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-01`;
+};
+
 const TourPlan = () => {
   const { user } = useAuth();
   const todayDate = useMemo(() => getTodayDateString(), []);
+  const earliestAllowedDate = useMemo(() => getFirstDayOfLastMonthString(), []);
   const canCreate = ['Asst General Manager', 'Admin', 'admin', 'Associate Vice President'].includes(user?.role);
 
   // Tour Plans List State
@@ -111,7 +120,7 @@ const TourPlan = () => {
         role: user?.role,
         username: user?.username,
         employee_id: user?.employee_id || user?.Emp_Code,
-        division: user?.division || user?.Division,
+        division: user?.role === 'BM' ? undefined : (user?.division || user?.Division),
       };
       const res = await tourPlanService.getTourPlans(params);
       setTourPlans(res.data || []);
@@ -289,9 +298,9 @@ const TourPlan = () => {
       setFormError('Please select both From Date and To Date.');
       return;
     }
-    const todayStr = getTodayDateString();
-    if (!editingPlan && fromDate < todayStr) {
-      setFormError('From Date cannot be in the past. Please select today or a future date.');
+    const earliestStr = getFirstDayOfLastMonthString();
+    if (!editingPlan && fromDate < earliestStr) {
+      setFormError('From Date cannot be earlier than last month.');
       return;
     }
     if (fromDate > toDate) {
@@ -634,6 +643,8 @@ const TourPlan = () => {
                   ? 'Plan monthly field tours, select divisions & territories, assign to Scientific Officers, and notify teams.'
                   : user?.role === 'BL'
                   ? `Viewing monthly tour plans scheduled for your division (${user?.division || 'BL'}).`
+                  : user?.role === 'BM'
+                  ? `Viewing monthly tour plans as Business Manager (${user?.username || 'BM'}).`
                   : `Viewing monthly tour plans assigned to you (${user?.username || 'Scientific Officer'}).`}
               </p>
             </div>
@@ -667,6 +678,8 @@ const TourPlan = () => {
           <span>
             {user?.role === 'BL'
               ? `You are logged in as Business Leader (${user?.username || user?.Emp_Name}). You will receive email alerts and can view all tour plans scheduled for your division.`
+              : user?.role === 'BM'
+              ? `You are logged in as Business Manager (${user?.username || user?.Emp_Name}). You can view all tour plans.`
               : `You are logged in as Scientific Officer (${user?.username || user?.Emp_Name}). You can view all tour plans assigned to you.`}
           </span>
         </div>
@@ -1348,7 +1361,7 @@ const TourPlan = () => {
                     <input
                       type="date"
                       value={fromDate}
-                      min={editingPlan ? undefined : todayDate}
+                      min={editingPlan ? undefined : earliestAllowedDate}
                       onChange={handleFromDateChange}
                       required
                       className="tp-input"
@@ -1361,7 +1374,7 @@ const TourPlan = () => {
                       type="date"
                       value={toDate}
                       onChange={(e) => setToDate(e.target.value)}
-                      min={fromDate || (editingPlan ? undefined : todayDate)}
+                      min={fromDate || (editingPlan ? undefined : earliestAllowedDate)}
                       required
                       className="tp-input"
                     />
@@ -1826,9 +1839,6 @@ const TourPlan = () => {
                                   <td>
                                     <div className="doc-name-wrap">
                                       <span className="doc-name-text">Dr. {req.doctor_name}</span>
-                                      {req.is_priority_doctor && (
-                                        <span className="priority-doc-tag">Priority</span>
-                                      )}
                                     </div>
                                   </td>
                                   <td>

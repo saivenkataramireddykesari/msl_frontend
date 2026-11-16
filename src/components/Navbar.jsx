@@ -55,7 +55,7 @@ const Navbar = () => {
   const canAccessActivities = ['MSL', 'Scientific Officer', 'Asst General Manager', 'Associate Vice President', 'Admin', 'admin'].includes(user?.role);
   const canAccessMonthlyReport = ['BM', 'Asst General Manager', 'Associate Vice President', 'Admin', 'admin'].includes(user?.role);
   const canAccessPlannedVisits = ['MSL', 'Scientific Officer', 'Asst General Manager', 'Associate Vice President', 'Admin', 'admin'].includes(user?.role);
-  const canAccessTourPlan = ['Asst General Manager', 'Associate Vice President', 'Admin', 'admin', 'MSL', 'Scientific Officer', 'BL'].includes(user?.role);
+  const canAccessTourPlan = ['Asst General Manager', 'Associate Vice President', 'Admin', 'admin', 'MSL', 'Scientific Officer', 'BL', 'BM'].includes(user?.role);
 
   const getLandingPage = () => {
     if (['BM', 'Admin', 'admin'].includes(user?.role)) return '/monthly-report';

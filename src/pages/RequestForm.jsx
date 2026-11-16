@@ -27,6 +27,7 @@ const RequestForm = () => {
   const [suggestedDoctors, setSuggestedDoctors] = useState([]);
   const [showDoctorSuggestions, setShowDoctorSuggestions] = useState(false);
   const [selectedDoctorName, setSelectedDoctorName] = useState('');
+  const [selectedDoctorObj, setSelectedDoctorObj] = useState(null);
 
   // State for cascading dropdowns
   const [regions, setRegions] = useState([]);
@@ -111,6 +112,9 @@ const RequestForm = () => {
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
+        if (parsed.doctors) {
+          parsed.doctors = parsed.doctors.filter(d => Boolean(d.is_priority_doctor));
+        }
         setAccessData(parsed);
         setRegions(parsed.regions || []);
         if (parsed.regions?.length === 1) {
@@ -122,6 +126,9 @@ const RequestForm = () => {
       const res = await hierarchyService.getAccessData(user.employee_id);
       console.log("PATCH API RESPONSE:", res.data); // Added log
       const data = res.data;
+      if (data && data.doctors) {
+        data.doctors = data.doctors.filter(d => Boolean(d.is_priority_doctor));
+      }
       try {
         sessionStorage.setItem(cacheKey, JSON.stringify(data));
       } catch (storageErr) {
@@ -480,6 +487,7 @@ const RequestForm = () => {
         : {}),
     }));
     setSelectedDoctorName('');
+    setSelectedDoctorObj(null);
     setDoctorHistory([]);
   };
 
@@ -523,6 +531,9 @@ const RequestForm = () => {
         }
       }
 
+      // Strongly enforce: Only priority doctors can ever be suggested or accessed
+      fetchedDoctors = fetchedDoctors.filter(d => Boolean(d.is_priority_doctor));
+
       setSuggestedDoctors(fetchedDoctors);
       setShowDoctorSuggestions(true);
     } catch (err) {
@@ -533,8 +544,14 @@ const RequestForm = () => {
 
   // HANDLE DOCTOR SELECTION FROM SUGGESTIONS
   const handleDoctorSelect = (doctor) => {
+    if (!doctor || !doctor.is_priority_doctor) {
+      setError('Cannot select doctor: Only priority doctors can be requested.');
+      return;
+    }
+
     setShowBrandError(false);
     setError('');
+    setSelectedDoctorObj(doctor);
 
     const isBL = user?.role === 'BL' || user?.role === 'BH';
 
@@ -574,6 +591,7 @@ const RequestForm = () => {
       selectedBrands: [], // Clear selected brands
     }));
     setSelectedDoctorName('');
+    setSelectedDoctorObj(null);
     setDoctorSearchTerm('');
     setDoctorHistory([]);
     setAvailableBrands([]); // Clear available brands
@@ -588,6 +606,10 @@ const RequestForm = () => {
           const res = await doctorService.getDoctor(selectedDoctorId); // Assuming an API to get doctor by ID
           const doctor = res.data;
           if (doctor) {
+            if (!doctor.is_priority_doctor) {
+              setError('Cannot raise request: Selected doctor is not a priority doctor.');
+              return;
+            }
             handleDoctorSelect(doctor);
             // Also set patch, territory, region if doctor data contains it
             setFormData(prev => ({
@@ -711,6 +733,13 @@ const RequestForm = () => {
 
       if (!doctorId) {
         setError('Invalid doctor selected');
+        setLoading(false);
+        return;
+      }
+
+      // Strongly verify doctor is a priority doctor before submission
+      if (selectedDoctorObj && !selectedDoctorObj.is_priority_doctor) {
+        setError('Cannot raise request: Selected doctor is not a priority doctor.');
         setLoading(false);
         return;
       }
