@@ -1415,7 +1415,17 @@
 .tp-table-responsive {
   width: 100%;
   overflow-x: auto;
+  min-height: 420px;
   -webkit-overflow-scrolling: touch;
+}
+
+.tp-empty-filter-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 16px;
+  text-align: center;
 }
 
 .tp-list-table {

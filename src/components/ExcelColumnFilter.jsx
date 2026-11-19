@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import '../styles/ExcelColumnFilter.css';
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
 
 /**
  * Excel-like column filter popover for data tables.
@@ -32,12 +38,28 @@ const ExcelColumnFilter = ({
 
     for (const item of dataset) {
       let rawVal = getValue ? getValue(item) : item[columnKey];
-      let val = rawVal === null || rawVal === undefined ? '' : String(rawVal).trim();
-      if (!val) {
-        blanks = true;
-        val = '__BLANK__';
+      if (Array.isArray(rawVal)) {
+        if (rawVal.length === 0) {
+          blanks = true;
+          valueCounts.set('__BLANK__', (valueCounts.get('__BLANK__') || 0) + 1);
+        } else {
+          for (const itemVal of rawVal) {
+            let val = itemVal === null || itemVal === undefined ? '' : String(itemVal).trim();
+            if (!val) {
+              blanks = true;
+              val = '__BLANK__';
+            }
+            valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
+          }
+        }
+      } else {
+        let val = rawVal === null || rawVal === undefined ? '' : String(rawVal).trim();
+        if (!val) {
+          blanks = true;
+          val = '__BLANK__';
+        }
+        valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
       }
-      valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
     }
 
     const values = Array.from(valueCounts.keys()).sort((a, b) => {
@@ -48,19 +70,40 @@ const ExcelColumnFilter = ({
         const numB = parseFloat(b);
         if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
       }
+      if (dataType === 'month') {
+        const idxA = MONTH_NAMES.indexOf(a);
+        const idxB = MONTH_NAMES.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+      }
+      if (dataType === 'date') {
+        const dateA = new Date(a).getTime();
+        const dateB = new Date(b).getTime();
+        if (!isNaN(dateA) && !isNaN(dateB)) return dateA - dateB;
+      }
       return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
     });
 
     return { uniqueValues: values, counts: valueCounts, hasBlanks: blanks };
   }, [dataset, columnKey, getValue, dataType]);
 
-  // Initial selected values: if filterValues is null/undefined, all are selected initially
+  // Initial selected values: if filterValues is a Set, use it; otherwise start empty (don't defaultly select all)
   const [tempSelected, setTempSelected] = useState(() => {
     if (filterValues instanceof Set) {
       return new Set(filterValues);
     }
-    return new Set(uniqueValues);
+    return new Set();
   });
+
+  // Sync tempSelected whenever filterValues change
+  useEffect(() => {
+    if (filterValues instanceof Set) {
+      setTempSelected(new Set(filterValues));
+    } else {
+      setTempSelected(new Set());
+    }
+  }, [filterValues]);
 
   // Filter the list of values by search term
   const visibleValues = useMemo(() => {
@@ -130,8 +173,8 @@ const ExcelColumnFilter = ({
   };
 
   const handleApply = () => {
-    // If all unique values are selected, it means no filter is applied
-    if (tempSelected.size === uniqueValues.length) {
+    // If all unique values are selected, or no values are selected, no filter is applied
+    if (tempSelected.size === 0 || tempSelected.size === uniqueValues.length) {
       onApplyFilter?.(null);
     } else {
       onApplyFilter?.(new Set(tempSelected));
@@ -148,8 +191,17 @@ const ExcelColumnFilter = ({
   const isSortedDesc = sortConfig?.key === columnKey && sortConfig?.direction === 'desc';
 
   // Sort labels based on data type
-  const sortAscLabel = dataType === 'number' ? 'Sort Smallest to Largest' : dataType === 'date' ? 'Sort Oldest to Newest' : 'Sort A to Z';
-  const sortDescLabel = dataType === 'number' ? 'Sort Largest to Smallest' : dataType === 'date' ? 'Sort Newest to Oldest' : 'Sort Z to A';
+  const sortAscLabel = dataType === 'number'
+    ? 'Sort Smallest to Largest'
+    : (dataType === 'date' || dataType === 'month')
+    ? 'Sort Oldest to Newest'
+    : 'Sort A to Z';
+
+  const sortDescLabel = dataType === 'number'
+    ? 'Sort Largest to Smallest'
+    : (dataType === 'date' || dataType === 'month')
+    ? 'Sort Newest to Oldest'
+    : 'Sort Z to A';
 
   return (
     <div

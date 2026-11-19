@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { tourPlanService } from '../services/api';
+import ExcelColumnFilter from '../components/ExcelColumnFilter';
 import '../styles/TourPlan.css';
 
 const MONTH_NAMES = [
@@ -424,18 +425,209 @@ const TourPlan = () => {
     );
   }, [availableTerritories, territorySearch]);
 
-  // Client-side filtering of tour plans list
-  const filteredTourPlans = useMemo(() => {
+  // Excel-like Column Filters & Sorting State
+  const [columnFilters, setColumnFilters] = useState({});
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [activeFilterMenu, setActiveFilterMenu] = useState(null);
+
+  // Helper to extract or derive the month name for a tour plan
+  const getPlanMonth = (p) => {
+    if (p.month) {
+      const num = parseInt(p.month, 10);
+      if (!isNaN(num) && num >= 1 && num <= 12) {
+        return MONTH_NAMES[num - 1];
+      }
+      const found = MONTH_NAMES.find(
+        (m) => m.toLowerCase() === String(p.month).trim().toLowerCase()
+      );
+      if (found) return found;
+      return String(p.month).trim();
+    }
+    if (p.from_date) {
+      const d = new Date(p.from_date);
+      if (!isNaN(d.getTime())) {
+        return MONTH_NAMES[d.getMonth()];
+      }
+    }
+    return '';
+  };
+
+  const TABLE_COLUMNS = useMemo(() => [
+    {
+      key: 'dates',
+      title: 'Dates (From → To)',
+      getValue: (p) => getPlanMonth(p),
+      getSortValue: (p) => p.from_date || '',
+      dataType: 'month',
+      width: '180px',
+      popoverAlign: 'left',
+    },
+    {
+      key: 'assigned_so',
+      title: 'Scientific Officer (SO)',
+      getValue: (p) => p.assigned_so || 'Unassigned',
+      getSortValue: (p) => p.assigned_so || '',
+      dataType: 'text',
+      width: '210px',
+      popoverAlign: 'left',
+    },
+    {
+      key: 'divisions',
+      title: 'Divisions',
+      getValue: (p) => p.divisions || [],
+      getSortValue: (p) => (p.divisions || []).join(', '),
+      dataType: 'text',
+      width: '180px',
+      popoverAlign: 'left',
+    },
+    {
+      key: 'territories',
+      title: 'Territories',
+      getValue: (p) => p.territories || [],
+      getSortValue: (p) => (p.territories || []).join(', '),
+      dataType: 'text',
+      popoverAlign: 'left',
+    },
+    {
+      key: 'assigned_doctors_count',
+      title: 'Assigned Doctors',
+      getValue: (p) => (p.assigned_doctors_count !== undefined ? p.assigned_doctors_count : 0),
+      getSortValue: (p) => (p.assigned_doctors_count !== undefined ? Number(p.assigned_doctors_count) : 0),
+      dataType: 'number',
+      width: '150px',
+      align: 'center',
+      popoverAlign: 'right',
+    },
+  ], []);
+
+  const activeColumnFiltersCount = useMemo(() => {
+    return Object.values(columnFilters).filter((v) => v instanceof Set).length;
+  }, [columnFilters]);
+
+  const handleApplyColumnFilter = (columnKey, valSet) => {
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      if (!valSet || (valSet instanceof Set && valSet.size === 0)) {
+        delete next[columnKey];
+      } else {
+        next[columnKey] = valSet;
+      }
+      return next;
+    });
+  };
+
+  const handleClearColumnFilter = (columnKey) => {
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      delete next[columnKey];
+      return next;
+    });
+  };
+
+  const handleClearAllColumnFilters = () => {
+    setColumnFilters({});
+  };
+
+  const handleSortColumn = (columnKey, direction) => {
+    setSortConfig({ key: columnKey, direction });
+  };
+
+  const handleHeaderClick = (columnKey) => {
+    setSortConfig((prev) => {
+      if (prev.key === columnKey) {
+        if (prev.direction === 'asc') return { key: columnKey, direction: 'desc' };
+        return { key: null, direction: 'asc' };
+      }
+      return { key: columnKey, direction: 'asc' };
+    });
+  };
+
+  const handleResetAllFilters = () => {
+    setSearchTerm('');
+    setColumnFilters({});
+    setSortConfig({ key: null, direction: 'asc' });
+  };
+
+  // Stage 1: Filter tour plans by top search query
+  const filteredBeforeExcel = useMemo(() => {
     return tourPlans.filter((plan) => {
       if (!searchTerm.trim()) return true;
-      const term = searchTerm.toLowerCase();
+      const term = searchTerm.toLowerCase().trim();
       const soMatch = (plan.assigned_so || '').toLowerCase().includes(term);
       const creatorMatch = (plan.created_by || '').toLowerCase().includes(term);
-      const divMatch = (plan.divisions || []).some((d) => d.toLowerCase().includes(term));
-      const terrMatch = (plan.territories || []).some((t) => t.toLowerCase().includes(term));
-      return soMatch || creatorMatch || divMatch || terrMatch;
+      const divMatch = (plan.divisions || []).some((d) => (d || '').toLowerCase().includes(term));
+      const terrMatch = (plan.territories || []).some((t) => (t || '').toLowerCase().includes(term));
+      const remarksMatch = (plan.remarks || '').toLowerCase().includes(term);
+      const dateMatch = `${plan.from_date || ''} ${plan.to_date || ''} ${plan.month || ''} ${plan.year || ''}`.toLowerCase().includes(term);
+      return soMatch || creatorMatch || divMatch || terrMatch || remarksMatch || dateMatch;
     });
   }, [tourPlans, searchTerm]);
+
+  // Stage 2: Apply Excel column filters and sorting
+  const filteredTourPlans = useMemo(() => {
+    let data = filteredBeforeExcel;
+
+    // Apply active Excel column filters
+    const activeFilters = Object.entries(columnFilters).filter(([_, set]) => set instanceof Set);
+    if (activeFilters.length > 0) {
+      data = data.filter((item) => {
+        for (const [colKey, allowedSet] of activeFilters) {
+          const col = TABLE_COLUMNS.find((c) => c.key === colKey);
+          let rawVal = col?.getValue ? col.getValue(item) : item[colKey];
+          if (Array.isArray(rawVal)) {
+            if (rawVal.length === 0) {
+              if (!allowedSet.has('__BLANK__')) return false;
+            } else {
+              const hasMatch = rawVal.some((v) => {
+                let s = v === null || v === undefined ? '' : String(v).trim();
+                return allowedSet.has(s || '__BLANK__');
+              });
+              if (!hasMatch) return false;
+            }
+          } else {
+            let val = rawVal === null || rawVal === undefined ? '' : String(rawVal).trim();
+            if (!val) val = '__BLANK__';
+            if (!allowedSet.has(val)) {
+              return false;
+            }
+          }
+        }
+        return true;
+      });
+    }
+
+    // Apply sorting
+    if (sortConfig.key) {
+      const col = TABLE_COLUMNS.find((c) => c.key === sortConfig.key);
+      const getSortVal = col?.getSortValue || col?.getValue || ((r) => r[sortConfig.key]);
+      const dir = sortConfig.direction === 'desc' ? -1 : 1;
+      const isNum = col?.dataType === 'number';
+      const isDate = col?.dataType === 'date' || col?.dataType === 'month';
+
+      data = [...data].sort((a, b) => {
+        const rawA = getSortVal(a);
+        const rawB = getSortVal(b);
+        const valA = Array.isArray(rawA) ? rawA.join(', ') : rawA;
+        const valB = Array.isArray(rawB) ? rawB.join(', ') : rawB;
+        if (valA === valB) return 0;
+        if (valA === null || valA === undefined || valA === '') return 1;
+        if (valB === null || valB === undefined || valB === '') return -1;
+        if (isNum) {
+          const numA = Number(valA);
+          const numB = Number(valB);
+          if (!isNaN(numA) && !isNaN(numB)) return (numA - numB) * dir;
+        }
+        if (isDate) {
+          const dateA = new Date(valA).getTime();
+          const dateB = new Date(valB).getTime();
+          if (!isNaN(dateA) && !isNaN(dateB)) return (dateA - dateB) * dir;
+        }
+        return String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+      });
+    }
+
+    return data;
+  }, [filteredBeforeExcel, columnFilters, sortConfig, TABLE_COLUMNS]);
 
   // Unique divisions count across loaded plans
   const totalDivisionsCovered = useMemo(() => {
@@ -698,7 +890,11 @@ const TourPlan = () => {
           </div>
           <div className="tp-stat-details">
             <span className="tp-stat-label">Total Tour Plans</span>
-            <span className="tp-stat-value">{tourPlans.length}</span>
+            <span className="tp-stat-value">
+              {filteredTourPlans.length !== tourPlans.length
+                ? `${filteredTourPlans.length} / ${tourPlans.length}`
+                : tourPlans.length}
+            </span>
           </div>
         </div>
 
@@ -753,12 +949,12 @@ const TourPlan = () => {
             )}
           </div>
 
-          {searchTerm && (
+          {(searchTerm || activeColumnFiltersCount > 0 || sortConfig.key) && (
             <button
               className="tp-btn-secondary reset-filter-btn"
-              onClick={() => setSearchTerm('')}
+              onClick={handleResetAllFilters}
             >
-              Reset Search
+              Reset Filters
             </button>
           )}
 
@@ -810,7 +1006,7 @@ const TourPlan = () => {
             Try Again
           </button>
         </div>
-      ) : filteredTourPlans.length === 0 ? (
+      ) : tourPlans.length === 0 ? (
         <div className="tp-empty-state">
           <div className="tp-empty-icon">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -820,13 +1016,11 @@ const TourPlan = () => {
           </div>
           <h3>No Tour Plans Found</h3>
           <p>
-            {searchTerm
-              ? 'No tour plans match your search query.'
-              : canCreate
+            {canCreate
               ? 'No tour plans have been created yet. Click "Create Tour Plan" above to create the first monthly plan.'
               : 'There are no active tour plans assigned to your division or account.'}
           </p>
-          {canCreate && !searchTerm && (
+          {canCreate && (
             <button
               className="tp-btn-primary"
               onClick={handleOpenCreate}
@@ -837,20 +1031,133 @@ const TourPlan = () => {
         </div>
       ) : viewMode === 'list' ? (
         <div className="tp-table-card">
+          {/* Active Column Filters Bar */}
+          {activeColumnFiltersCount > 0 && (
+            <div className="active-column-filters-bar">
+              <span className="active-filters-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                Active Column Filters ({activeColumnFiltersCount}):
+              </span>
+              {Object.entries(columnFilters).map(([colKey, setVals]) => {
+                if (!(setVals instanceof Set)) return null;
+                const col = TABLE_COLUMNS.find((c) => c.key === colKey);
+                return (
+                  <span key={colKey} className="col-filter-pill">
+                    <span>{col?.title || colKey}: {setVals.size} selected</span>
+                    <button
+                      type="button"
+                      onClick={() => handleClearColumnFilter(colKey)}
+                      title="Remove this column filter"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                );
+              })}
+              <button
+                type="button"
+                className="clear-all-col-filters-btn"
+                onClick={handleClearAllColumnFilters}
+              >
+                Clear All Column Filters
+              </button>
+            </div>
+          )}
+
           <div className="tp-table-responsive">
             <table className="tp-list-table">
               <thead>
                 <tr>
-                  <th style={{ width: '170px' }}>Dates (From &rarr; To)</th>
-                  <th style={{ width: '190px' }}>Scientific Officer (SO)</th>
-                  <th style={{ width: '170px' }}>Divisions</th>
-                  <th>Territories</th>
-                  <th style={{ width: '140px', textAlign: 'center' }}>Assigned Doctors</th>
+                  {TABLE_COLUMNS.map((col) => {
+                    const isFiltered = columnFilters[col.key] instanceof Set;
+                    const isSorted = sortConfig.key === col.key;
+                    return (
+                      <th
+                        key={col.key}
+                        className="excel-th"
+                        style={{
+                          ...(col.width ? { width: col.width } : {}),
+                          ...(col.align ? { textAlign: col.align } : {}),
+                        }}
+                      >
+                        <div className="excel-th-inner">
+                          <span
+                            className="excel-th-title"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => handleHeaderClick(col.key)}
+                            title={`Click to sort by ${col.title}`}
+                          >
+                            <span>{col.title}</span>
+                            {isSorted && (
+                              <span className="excel-sort-indicator">
+                                {sortConfig.direction === 'asc' ? '▲' : '▼'}
+                              </span>
+                            )}
+                          </span>
+
+                          <button
+                            type="button"
+                            className={`excel-filter-trigger ${isFiltered ? 'active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFilterMenu((prev) => (prev === col.key ? null : col.key));
+                            }}
+                            title={`Filter by ${col.title} (Excel-like)`}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill={isFiltered ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2">
+                              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                            </svg>
+                          </button>
+                        </div>
+
+                        {activeFilterMenu === col.key && (
+                          <ExcelColumnFilter
+                            columnKey={col.key}
+                            title={col.title}
+                            dataset={filteredBeforeExcel}
+                            getValue={col.getValue}
+                            filterValues={columnFilters[col.key]}
+                            onApplyFilter={(valSet) => handleApplyColumnFilter(col.key, valSet)}
+                            sortConfig={sortConfig}
+                            onSort={(dir) => handleSortColumn(col.key, dir)}
+                            dataType={col.dataType}
+                            align={col.popoverAlign || 'left'}
+                            onClose={() => setActiveFilterMenu(null)}
+                          />
+                        )}
+                      </th>
+                    );
+                  })}
                   <th style={{ width: '110px', textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTourPlans.map((plan) => {
+                {filteredTourPlans.length === 0 ? (
+                  <tr>
+                    <td colSpan={TABLE_COLUMNS.length + 1} style={{ textAlign: 'center', padding: '48px 24px' }}>
+                      <div className="tp-empty-filter-state">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{ marginBottom: '12px' }}>
+                          <circle cx="11" cy="11" r="8" />
+                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        </svg>
+                        <h4 style={{ margin: '0 0 6px 0', color: '#1e293b', fontSize: '15px' }}>No matching tour plans found</h4>
+                        <p style={{ margin: '0 0 16px 0', color: '#64748b', fontSize: '13px' }}>
+                          No tour plans match your current search or Excel column filters.
+                        </p>
+                        <button
+                          type="button"
+                          className="tp-btn-secondary"
+                          onClick={handleResetAllFilters}
+                        >
+                          Clear All Filters
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTourPlans.map((plan) => {
                   const isExpanded = !!expandedCards[plan.id];
                   const displayedTerritories = isExpanded
                     ? plan.territories || []
@@ -1043,14 +1350,58 @@ const TourPlan = () => {
                       </td>
                     </tr>
                   );
-                })}
+                }))}
               </tbody>
             </table>
           </div>
         </div>
       ) : (
-        <div className="tp-cards-grid">
-          {filteredTourPlans.map((plan) => {
+        <div className="tp-cards-view-wrap">
+          {activeColumnFiltersCount > 0 && (
+            <div className="active-column-filters-bar" style={{ borderRadius: '12px', marginBottom: '16px' }}>
+              <span className="active-filters-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                Active Column Filters ({activeColumnFiltersCount}):
+              </span>
+              {Object.entries(columnFilters).map(([colKey, setVals]) => {
+                if (!(setVals instanceof Set)) return null;
+                const col = TABLE_COLUMNS.find((c) => c.key === colKey);
+                return (
+                  <span key={colKey} className="col-filter-pill">
+                    <span>{col?.title || colKey}: {setVals.size} selected</span>
+                    <button
+                      type="button"
+                      onClick={() => handleClearColumnFilter(colKey)}
+                      title="Remove this column filter"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                );
+              })}
+              <button
+                type="button"
+                className="clear-all-col-filters-btn"
+                onClick={handleClearAllColumnFilters}
+              >
+                Clear All Column Filters
+              </button>
+            </div>
+          )}
+
+          {filteredTourPlans.length === 0 ? (
+            <div className="tp-empty-state">
+              <h3>No matching tour plans</h3>
+              <p>Try adjusting your search or active column filters.</p>
+              <button type="button" className="tp-btn-secondary" onClick={handleResetAllFilters}>
+                Clear All Filters
+              </button>
+            </div>
+          ) : (
+            <div className="tp-cards-grid">
+              {filteredTourPlans.map((plan) => {
             const isExpanded = !!expandedCards[plan.id];
             const displayedTerritories = isExpanded
               ? plan.territories || []
@@ -1229,7 +1580,9 @@ const TourPlan = () => {
             );
           })}
         </div>
-      )}
+        )}
+      </div>
+    )}
 
       {/* CREATE / EDIT TOUR PLAN MODAL (For Asst General Manager / Admin) */}
       {showModal && (

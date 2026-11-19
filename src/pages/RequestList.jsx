@@ -120,10 +120,15 @@ const RequestList = () => {
   }, [columnFilters]);
 
   const handleApplyColumnFilter = (columnKey, valSet) => {
-    setColumnFilters(prev => ({
-      ...prev,
-      [columnKey]: valSet
-    }));
+    setColumnFilters(prev => {
+      const next = { ...prev };
+      if (!valSet || (valSet instanceof Set && valSet.size === 0)) {
+        delete next[columnKey];
+      } else {
+        next[columnKey] = valSet;
+      }
+      return next;
+    });
   };
 
   const handleClearColumnFilter = (columnKey) => {

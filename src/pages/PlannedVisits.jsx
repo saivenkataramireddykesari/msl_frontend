@@ -152,28 +152,24 @@ const PlannedVisits = () => {
   // Toggle item selection in column Excel filter
   const toggleColumnFilterVal = (key, val) => {
     setColumnFilters((prev) => {
-      const currentList = prev[key];
+      const currentList = prev[key] || [];
       const allDistinctVals = getDistinctValues(key).map((d) => d.val);
 
-      if (!currentList) {
-        // Was "Select All" active -> now uncheck this specific val
-        const newList = allDistinctVals.filter((v) => v !== val);
-        return { ...prev, [key]: newList };
+      let newList;
+      if (currentList.includes(val)) {
+        newList = currentList.filter((v) => v !== val);
+      } else {
+        newList = [...currentList, val];
       }
 
-      if (currentList.includes(val)) {
-        const newList = currentList.filter((v) => v !== val);
-        return { ...prev, [key]: newList };
-      } else {
-        const newList = [...currentList, val];
-        // If all items now selected, clear the filter array
-        if (newList.length >= allDistinctVals.length) {
-          const updated = { ...prev };
-          delete updated[key];
-          return updated;
-        }
-        return { ...prev, [key]: newList };
+      // If all items selected or none selected, remove the filter
+      if (newList.length === 0 || newList.length >= allDistinctVals.length) {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
       }
+
+      return { ...prev, [key]: newList };
     });
   };
 
@@ -186,7 +182,18 @@ const PlannedVisits = () => {
   };
 
   const selectAllColumnFilter = (key) => {
-    clearColumnFilter(key);
+    setColumnFilters((prev) => {
+      const currentList = prev[key] || [];
+      const allDistinctVals = getDistinctValues(key).map((d) => d.val);
+
+      if (currentList.length >= allDistinctVals.length) {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      }
+
+      return { ...prev, [key]: allDistinctVals };
+    });
   };
 
   const handleSortColumn = (key, direction) => {
@@ -200,7 +207,8 @@ const PlannedVisits = () => {
     // 1. Column Filters
     Object.keys(columnFilters).forEach((key) => {
       const selectedVals = columnFilters[key];
-      if (selectedVals && selectedVals.length > 0) {
+      const allDistinctVals = getDistinctValues(key).map((d) => d.val);
+      if (selectedVals && selectedVals.length > 0 && selectedVals.length < allDistinctVals.length) {
         list = list.filter((item) => {
           let val = item[key];
           if (val === undefined || val === null || val === '') val = 'N/A';
@@ -403,7 +411,9 @@ const PlannedVisits = () => {
               <tr>
                 {COLUMNS.map((col) => {
                   const isSorted = sortConfig.key === col.key;
-                  const isFiltered = (columnFilters[col.key] || []).length > 0;
+                  const allDistinct = getDistinctValues(col.key);
+                  const selectedCount = (columnFilters[col.key] || []).length;
+                  const isFiltered = selectedCount > 0 && selectedCount < allDistinct.length;
                   const isOpen = activeFilterMenu === col.key;
 
                   return (
@@ -497,19 +507,29 @@ const PlannedVisits = () => {
                             <label className="excel-checkbox-item select-all">
                               <input
                                 type="checkbox"
-                                checked={!columnFilters[col.key] || columnFilters[col.key].length === 0}
+                                checked={
+                                  Array.isArray(columnFilters[col.key]) &&
+                                  allDistinct.length > 0 &&
+                                  columnFilters[col.key].length >= allDistinct.length
+                                }
+                                ref={(el) => {
+                                  if (el) {
+                                    const len = (columnFilters[col.key] || []).length;
+                                    el.indeterminate = len > 0 && len < allDistinct.length;
+                                  }
+                                }}
                                 onChange={() => selectAllColumnFilter(col.key)}
                               />
                               <span className="val-text"><strong>(Select All)</strong></span>
                             </label>
 
-                            {getDistinctValues(col.key)
+                            {allDistinct
                               .filter(({ val }) =>
                                 val.toLowerCase().includes((columnSearch[col.key] || '').toLowerCase())
                               )
                               .map(({ val, count }) => {
                                 const isChecked =
-                                  !columnFilters[col.key] || columnFilters[col.key].includes(val);
+                                  Array.isArray(columnFilters[col.key]) && columnFilters[col.key].includes(val);
                                 return (
                                   <label key={val} className="excel-checkbox-item">
                                     <input
